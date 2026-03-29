@@ -31,7 +31,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="p-5 border-b border-[#F3F4F6]">
         <h1 className="text-xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">
-          Case<span className="text-[#F97316]">Flow</span>
+          Hack<span className="text-[#F97316]">Forge</span>
         </h1>
         <p className="text-[10px] text-[#9CA3AF] uppercase tracking-widest font-bold mt-0.5">Case Management</p>
       </div>

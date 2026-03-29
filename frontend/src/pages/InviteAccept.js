@@ -50,7 +50,7 @@ export default function InviteAccept() {
         <div className="space-y-2">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#F97316] to-[#FB923C] flex items-center justify-center"><Heart className="h-5 w-5 text-white fill-white" /></div>
-            <span className="text-2xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">CaseFlow</span>
+            <span className="text-2xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">HackForge</span>
           </div>
           {error && !invite ? (
             <div className="p-6 bg-white border border-[#E8E8E8] rounded-xl text-center space-y-4">

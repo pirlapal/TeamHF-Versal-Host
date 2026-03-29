@@ -1,0 +1,48 @@
+services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: hackforge
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env.docker
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      DB_NAME: hackforge
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+      args:
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:

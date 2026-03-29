@@ -197,7 +197,7 @@ async def create_shareable_invite(data: ShareableLinkCreate, request: Request):
     }
     await db.invites.insert_one(invite_doc)
     tenant = await db.tenants.find_one({"_id": ObjectId(user.get("tenant_id"))})
-    org_name = tenant.get("name", "CaseFlow") if tenant else "CaseFlow"
+    org_name = tenant.get("name", "HackForge") if tenant else "HackForge"
     shareable_url = f"{frontend_url}/invite/{token}"
     return {
         "token": token, "email": data.email, "role": data.role,

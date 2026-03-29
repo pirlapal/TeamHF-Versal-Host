@@ -204,7 +204,7 @@ def build_email_html(title: str, body: str, cta_text: str = "", cta_url: str = "
 <p style="color:#4B5563;font-size:14px;line-height:1.6;margin:0">{body}</p>
 {cta_block}
 </div>
-<p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:20px">Sent by CaseFlow Case Management</p>
+<p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:20px">Sent by HackForge Case Management</p>
 </div>"""
 
 async def send_notification_email(tenant_id: str, user_id: str, notif_type: str, title: str, message: str, link: str = ""):
@@ -214,7 +214,7 @@ async def send_notification_email(tenant_id: str, user_id: str, notif_type: str,
     user = await db.users.find_one({"_id": ObjectId(user_id)}, {"email": 1, "name": 1})
     if user and user.get("email"):
         html = build_email_html(title, message, "View Details", link if link.startswith("http") else "")
-        send_email(user["email"], f"CaseFlow: {title}", html)
+        send_email(user["email"], f"HackForge: {title}", html)
 
 # ── Advanced RBAC Permission System ──
 DEFAULT_PERMISSIONS = {

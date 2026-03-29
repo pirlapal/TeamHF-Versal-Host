@@ -20,7 +20,7 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 # Object Storage
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
-APP_NAME = "caseflow"
+APP_NAME = "hackforge"
 
 # Hugging Face
 HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"

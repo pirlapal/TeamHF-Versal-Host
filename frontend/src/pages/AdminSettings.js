@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserPlus, Save, Database, Link, Copy, CheckCircle, KeyRound, Trash2, Shield, Mail, Edit, Plus } from "lucide-react";
@@ -85,7 +86,6 @@ export default function AdminSettings() {
   };
 
   const handleClearData = async () => {
-    if (!window.confirm("Are you sure? This will delete ALL clients, services, visits, outcomes, payment records, and notifications for your organization. Demo login accounts will be preserved. This cannot be undone.")) return;
     setClearing(true);
     try {
       const { data } = await api.post("/demo/clear");
@@ -346,9 +346,27 @@ export default function AdminSettings() {
             <Button onClick={handleSeedDemo} disabled={seeding} className="bg-gradient-to-r from-[#14B8A6] to-[#2DD4BF] hover:from-[#0D9488] hover:to-[#14B8A6] text-white gap-2 rounded-lg font-bold shadow-md shadow-teal-200" data-testid="seed-demo-btn">
               {seeding ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Generating...</> : <><Database className="h-4 w-4" /> Load Demo Data</>}
             </Button>
-            <Button onClick={handleClearData} disabled={clearing} variant="outline" className="border-[#FECACA] text-[#EF4444] hover:bg-[#FEF2F2] gap-2 rounded-lg font-bold" data-testid="clear-demo-btn">
-              {clearing ? <><div className="w-4 h-4 border-2 border-[#EF4444]/30 border-t-[#EF4444] rounded-full animate-spin" /> Clearing...</> : <><Trash2 className="h-4 w-4" /> Clear All Data</>}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button disabled={clearing} variant="outline" className="border-[#FECACA] text-[#EF4444] hover:bg-[#FEF2F2] gap-2 rounded-lg font-bold" data-testid="clear-demo-btn">
+                  {clearing ? <><div className="w-4 h-4 border-2 border-[#EF4444]/30 border-t-[#EF4444] rounded-full animate-spin" /> Clearing...</> : <><Trash2 className="h-4 w-4" /> Clear All Data</>}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-white border-[#E8E8E8] rounded-2xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-[#1F2937] font-['Nunito'] font-bold">Clear All Organization Data?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-[#6B7280] text-sm">
+                    This will permanently delete ALL clients, services, visits, outcomes, payment records, and notifications. Demo login accounts will be preserved. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearData} className="bg-[#EF4444] hover:bg-[#DC2626] text-white rounded-lg font-bold" data-testid="confirm-clear-btn">
+                    Yes, Clear Everything
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             {/* Demo Credentials */}
             {demoUsers.length > 0 && (

@@ -34,7 +34,7 @@ async def create_payment_request(data: PaymentRequestCreate, request: Request):
     from helpers import send_email, build_email_html
     html = build_email_html(
         "Payment Request",
-        f"You have a payment request from {user.get('name', 'CaseFlow')}.<br><br>"
+        f"You have a payment request from {user.get('name', 'HackForge')}.<br><br>"
         f"<strong>Amount:</strong> ${data.amount:.2f}<br>"
         f"<strong>Description:</strong> {data.description}<br>"
         f"<strong>Due Date:</strong> {data.due_date or 'N/A'}",

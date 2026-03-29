@@ -208,7 +208,7 @@ async def client_pdf_report(client_id: str, request: Request):
 
         elements = []
         # Header
-        elements.append(Paragraph("CaseFlow - Client Report", title_style))
+        elements.append(Paragraph("HackForge - Client Report", title_style))
         elements.append(Paragraph(f"Generated: {datetime.now(timezone.utc).strftime('%B %d, %Y')}", small_style))
         elements.append(Spacer(1, 12))
 
@@ -340,7 +340,7 @@ async def org_pdf_report(request: Request):
         small_style = ParagraphStyle('Small2', parent=styles['Normal'], fontSize=8, textColor=HexColor('#9CA3AF'))
 
         elements = []
-        elements.append(Paragraph(f"CaseFlow - {org_name} Report", title_style))
+        elements.append(Paragraph(f"HackForge - {org_name} Report", title_style))
         elements.append(Paragraph(f"Generated: {datetime.now(timezone.utc).strftime('%B %d, %Y')}", small_style))
         elements.append(Spacer(1, 16))
 
