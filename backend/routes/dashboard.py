@@ -35,8 +35,8 @@ async def dashboard_trends(request: Request, range: str = "month"):
     else:
         start = now - timedelta(days=30)
     start_str = start.isoformat()
-    services = await db.service_logs.find({"tenant_id": tid, "created_at": {"$gte": start_str}}).to_list(1000)
-    visits = await db.visits.find({"tenant_id": tid, "created_at": {"$gte": start_str}}).to_list(1000)
+    services = await db.service_logs.find({"tenant_id": tid, "service_date": {"$gte": start.strftime("%Y-%m-%d")}}).to_list(1000)
+    visits = await db.visits.find({"tenant_id": tid, "date": {"$gte": start_str}}).to_list(1000)
     service_by_date = defaultdict(int)
     visit_by_date = defaultdict(int)
     for s in services:

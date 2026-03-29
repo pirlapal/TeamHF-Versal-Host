@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserPlus, Save, Database, Link, Copy, CheckCircle, KeyRound, Trash2, Shield, Mail } from "lucide-react";
+import { UserPlus, Save, Database, Link, Copy, CheckCircle, KeyRound, Trash2, Shield, Mail, Edit, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -18,6 +18,9 @@ export default function AdminSettings() {
   const [users, setUsers] = useState([]);
   const [invites, setInvites] = useState([]);
   const [fieldSets, setFieldSets] = useState([]);
+  const [showFieldSetForm, setShowFieldSetForm] = useState(false);
+  const [fieldSetName, setFieldSetName] = useState("Client Intake");
+  const [fieldSetFields, setFieldSetFields] = useState([{ label: "", type: "TEXT", required: false }]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: "", role: "CASE_WORKER" });
@@ -134,6 +137,28 @@ export default function AdminSettings() {
     permCategories[cat].push(p);
   });
 
+  const handleSaveFieldSet = async () => {
+    const validFields = fieldSetFields.filter(f => f.label.trim());
+    if (!fieldSetName.trim() || validFields.length === 0) { toast.error("Name and at least one field required"); return; }
+    try {
+      await api.put("/admin/field-sets", { name: fieldSetName, fields: validFields });
+      toast.success("Field set saved");
+      setShowFieldSetForm(false);
+      const { data } = await api.get("/admin/field-sets");
+      setFieldSets(data);
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+  };
+
+  const addFieldRow = () => setFieldSetFields(prev => [...prev, { label: "", type: "TEXT", required: false }]);
+  const removeFieldRow = (i) => setFieldSetFields(prev => prev.filter((_, idx) => idx !== i));
+  const updateFieldRow = (i, key, val) => setFieldSetFields(prev => prev.map((f, idx) => idx === i ? { ...f, [key]: val } : f));
+
+  const editFieldSet = (fs) => {
+    setFieldSetName(fs.name);
+    setFieldSetFields(fs.fields?.length > 0 ? fs.fields : [{ label: "", type: "TEXT", required: false }]);
+    setShowFieldSetForm(true);
+  };
+
   if (loading) return <div className="space-y-4">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>;
 
   return (
@@ -229,16 +254,79 @@ export default function AdminSettings() {
         {/* Field Sets Tab */}
         <TabsContent value="fields" className="mt-4 space-y-4">
           <div className="bg-white border border-[#E8E8E8] rounded-xl p-5">
-            <p className="text-xs text-[#9CA3AF] mb-4">Define custom fields for client intake forms.</p>
-            {fieldSets.length === 0 ? <p className="text-sm text-[#6B7280]">No field sets configured. Default fields will be used.</p>
-              : fieldSets.map((fs) => (
-                <div key={fs.id} className="mb-4 p-3 border border-[#E8E8E8] rounded-xl">
-                  <h4 className="text-sm font-bold text-[#1F2937] mb-2">{fs.name}</h4>
-                  <div className="space-y-1">{(fs.fields || []).map((f, i) => (
-                    <div key={i} className="text-xs text-[#6B7280] flex items-center gap-2"><span className="font-mono text-[#9CA3AF]">{f.type || "TEXT"}</span><span>{f.label}</span>{f.required && <Badge variant="outline" className="text-[10px] border-[#FECACA] text-[#EF4444] rounded-full">Required</Badge>}</div>
-                  ))}</div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-bold font-['Nunito'] text-[#1F2937]">Custom Field Sets</p>
+                <p className="text-xs text-[#9CA3AF]">Define custom fields for client intake forms.</p>
+              </div>
+              <Button onClick={() => { setFieldSetName("Client Intake"); setFieldSetFields([{ label: "", type: "TEXT", required: false }]); setShowFieldSetForm(true); }}
+                className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white gap-2 rounded-lg font-bold text-xs shadow-md shadow-orange-200" data-testid="add-fieldset-btn">
+                <Plus className="h-3.5 w-3.5" /> Add Field Set
+              </Button>
+            </div>
+            {fieldSets.length === 0 && !showFieldSetForm && <p className="text-sm text-[#6B7280] py-4 text-center">No field sets configured. Click "Add Field Set" to create one.</p>}
+            {fieldSets.map((fs) => (
+              <div key={fs.id} className="mb-3 p-4 border border-[#E8E8E8] rounded-xl hover:border-[#F97316]/30 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-bold text-[#1F2937]">{fs.name}</h4>
+                  <Button size="sm" variant="outline" onClick={() => editFieldSet(fs)} className="border-[#E5E7EB] text-[#6B7280] hover:border-[#F97316] text-xs rounded-lg h-7" data-testid={`edit-fieldset-${fs.id}`}>
+                    <Edit className="h-3 w-3 mr-1" /> Edit
+                  </Button>
                 </div>
-              ))}
+                <div className="space-y-1">{(fs.fields || []).map((f, i) => (
+                  <div key={i} className="text-xs text-[#6B7280] flex items-center gap-2">
+                    <span className="font-mono text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded text-[10px]">{f.type || "TEXT"}</span>
+                    <span>{f.label}</span>
+                    {f.required && <Badge variant="outline" className="text-[10px] border-[#FECACA] text-[#EF4444] rounded-full">Required</Badge>}
+                  </div>
+                ))}</div>
+              </div>
+            ))}
+
+            {/* Field Set Form */}
+            {showFieldSetForm && (
+              <div className="border border-[#F97316]/30 bg-[#FFF7ED]/30 rounded-xl p-5 space-y-4" data-testid="fieldset-form">
+                <div className="space-y-2">
+                  <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Field Set Name</Label>
+                  <Input value={fieldSetName} onChange={e => setFieldSetName(e.target.value)}
+                    placeholder="e.g. Client Intake, Demographics" className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg max-w-xs" data-testid="fieldset-name-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Fields</Label>
+                  {fieldSetFields.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input value={f.label} onChange={e => updateFieldRow(i, "label", e.target.value)}
+                        placeholder="Field label" className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg flex-1 h-8 text-xs" data-testid={`field-label-${i}`} />
+                      <Select value={f.type} onValueChange={v => updateFieldRow(i, "type", v)}>
+                        <SelectTrigger className="w-28 h-8 text-xs bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid={`field-type-${i}`}><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-white border-[#E8E8E8] rounded-xl">
+                          {["TEXT", "NUMBER", "DATE", "EMAIL", "PHONE", "SELECT", "TEXTAREA"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <Checkbox checked={f.required} onCheckedChange={v => updateFieldRow(i, "required", v)}
+                          className="border-[#D1D5DB] data-[state=checked]:bg-[#F97316] data-[state=checked]:border-[#F97316]" />
+                        <span className="text-[10px] text-[#9CA3AF]">Req</span>
+                      </label>
+                      {fieldSetFields.length > 1 && (
+                        <button onClick={() => removeFieldRow(i)} className="text-[#EF4444] hover:bg-[#FEF2F2] rounded p-1" data-testid={`remove-field-${i}`}>
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <Button size="sm" variant="ghost" onClick={addFieldRow} className="text-[#F97316] text-xs gap-1 h-7" data-testid="add-field-row-btn">
+                    <Plus className="h-3 w-3" /> Add Field
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveFieldSet} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold text-xs gap-1" data-testid="save-fieldset-btn">
+                    <Save className="h-3 w-3" /> Save Field Set
+                  </Button>
+                  <Button variant="ghost" onClick={() => setShowFieldSetForm(false)} className="text-[#9CA3AF] text-xs">Cancel</Button>
+                </div>
+              </div>
+            )}
           </div>
         </TabsContent>
 

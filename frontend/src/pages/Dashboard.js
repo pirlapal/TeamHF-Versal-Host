@@ -81,14 +81,18 @@ export default function Dashboard() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <button onClick={() => navigate("/clients/wizard")} className="bg-white border border-[#E8E8E8] rounded-xl p-4 flex flex-col items-center gap-2 hover:shadow-md hover:border-[#F97316] transition-all" data-testid="quick-action-wizard">
-          <div className="w-10 h-10 rounded-xl bg-[#FFF7ED] flex items-center justify-center"><Wand2 className="h-5 w-5 text-[#F97316]" /></div>
-          <span className="text-xs font-bold text-[#1F2937]">Onboard Client</span>
-        </button>
-        <button onClick={() => navigate("/clients")} className="bg-white border border-[#E8E8E8] rounded-xl p-4 flex flex-col items-center gap-2 hover:shadow-md hover:border-[#14B8A6] transition-all" data-testid="quick-action-clients">
-          <div className="w-10 h-10 rounded-xl bg-[#F0FDFA] flex items-center justify-center"><UserPlus className="h-5 w-5 text-[#14B8A6]" /></div>
-          <span className="text-xs font-bold text-[#1F2937]">Add Client</span>
-        </button>
+        {(user?.role === "ADMIN" || user?.role === "CASE_WORKER") && (
+          <>
+            <button onClick={() => navigate("/clients/wizard")} className="bg-white border border-[#E8E8E8] rounded-xl p-4 flex flex-col items-center gap-2 hover:shadow-md hover:border-[#F97316] transition-all" data-testid="quick-action-wizard">
+              <div className="w-10 h-10 rounded-xl bg-[#FFF7ED] flex items-center justify-center"><Wand2 className="h-5 w-5 text-[#F97316]" /></div>
+              <span className="text-xs font-bold text-[#1F2937]">Onboard Client</span>
+            </button>
+            <button onClick={() => navigate("/clients")} className="bg-white border border-[#E8E8E8] rounded-xl p-4 flex flex-col items-center gap-2 hover:shadow-md hover:border-[#14B8A6] transition-all" data-testid="quick-action-clients">
+              <div className="w-10 h-10 rounded-xl bg-[#F0FDFA] flex items-center justify-center"><UserPlus className="h-5 w-5 text-[#14B8A6]" /></div>
+              <span className="text-xs font-bold text-[#1F2937]">Add Client</span>
+            </button>
+          </>
+        )}
         {user?.role === "ADMIN" && (
           <button onClick={() => navigate("/reports")} className="bg-white border border-[#E8E8E8] rounded-xl p-4 flex flex-col items-center gap-2 hover:shadow-md hover:border-[#6366F1] transition-all" data-testid="quick-action-reports">
             <div className="w-10 h-10 rounded-xl bg-[#EEF2FF] flex items-center justify-center"><FileDown className="h-5 w-5 text-[#6366F1]" /></div>

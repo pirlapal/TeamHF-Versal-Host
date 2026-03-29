@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import api from "@/lib/api";
 import { formatApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,7 @@ const STATUS_COLORS = { SCHEDULED: "border-[#BFDBFE] text-[#3B82F6] bg-[#EFF6FF]
 const STATUS_ICONS = { SCHEDULED: Clock, COMPLETED: CheckCircle, CANCELLED: XCircle, NO_SHOW: AlertTriangle };
 
 export default function CalendarPage() {
+  const { user } = useAuth();
   const [visits, setVisits] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,9 @@ export default function CalendarPage() {
     <div className="space-y-6" data-testid="calendar-page">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div><h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">Calendar</h1><p className="text-sm text-[#9CA3AF] mt-1">{visits.length} scheduled visits</p></div>
-        <Button onClick={() => setShowCreate(true)} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white gap-2 rounded-lg font-bold shadow-md shadow-orange-200" data-testid="schedule-visit-btn"><Plus className="h-4 w-4" /> Schedule Visit</Button>
+        {(user?.role === "ADMIN" || user?.role === "CASE_WORKER") && (
+          <Button onClick={() => setShowCreate(true)} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white gap-2 rounded-lg font-bold shadow-md shadow-orange-200" data-testid="schedule-visit-btn"><Plus className="h-4 w-4" /> Schedule Visit</Button>
+        )}
       </div>
       {sortedDates.length === 0 ? (
         <div className="bg-white border border-[#E8E8E8] rounded-xl p-12 text-center" data-testid="calendar-empty"><Clock className="h-12 w-12 text-[#E5E7EB] mx-auto mb-4" /><p className="text-[#6B7280] mb-4">No visits scheduled</p><Button onClick={() => setShowCreate(true)} variant="outline" className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#FFF7ED] rounded-lg">Schedule your first visit</Button></div>
@@ -54,7 +58,7 @@ export default function CalendarPage() {
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3"><Icon className="h-4 w-4 text-[#6B7280]" /><div><span className="text-sm font-semibold text-[#1F2937]">{v.client_name || "Client"}</span><span className="text-xs text-[#9CA3AF] ml-3 font-mono">{v.duration}min</span></div></div>
                   <div className="flex items-center gap-2"><Badge variant="outline" className={`text-xs rounded-full ${STATUS_COLORS[v.status] || ""}`}>{v.status}</Badge>
-                    {v.status === "SCHEDULED" && <Select onValueChange={(val) => handleStatusChange(v.id, val)}><SelectTrigger className="h-7 w-28 text-xs bg-transparent border-[#E5E7EB] text-[#6B7280] rounded-lg" data-testid={`visit-status-${v.id}`}><SelectValue placeholder="Update" /></SelectTrigger><SelectContent className="bg-white border-[#E8E8E8] rounded-xl"><SelectItem value="COMPLETED">Completed</SelectItem><SelectItem value="CANCELLED">Cancelled</SelectItem><SelectItem value="NO_SHOW">No Show</SelectItem></SelectContent></Select>}
+                    {v.status === "SCHEDULED" && (user?.role === "ADMIN" || user?.role === "CASE_WORKER") && <Select onValueChange={(val) => handleStatusChange(v.id, val)}><SelectTrigger className="h-7 w-28 text-xs bg-transparent border-[#E5E7EB] text-[#6B7280] rounded-lg" data-testid={`visit-status-${v.id}`}><SelectValue placeholder="Update" /></SelectTrigger><SelectContent className="bg-white border-[#E8E8E8] rounded-xl"><SelectItem value="COMPLETED">Completed</SelectItem><SelectItem value="CANCELLED">Cancelled</SelectItem><SelectItem value="NO_SHOW">No Show</SelectItem></SelectContent></Select>}
                   </div>
                 </div>
                 {v.notes && <p className="text-xs text-[#9CA3AF] mt-2 pl-7">{v.notes}</p>}
