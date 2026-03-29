@@ -1,4 +1,5 @@
 backend/
+api/
 node_modules/
 .git/
 .env
@@ -9,3 +10,5 @@ __pycache__/
 docker-compose.yml
 Dockerfile
 nginx.conf
+requirements.txt
+*.py
