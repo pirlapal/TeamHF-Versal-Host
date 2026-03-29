@@ -25,6 +25,10 @@ APP_NAME = "caseflow"
 # Hugging Face
 HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
 
+# SendGrid Email
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'noreply@caseflow.io')
+
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

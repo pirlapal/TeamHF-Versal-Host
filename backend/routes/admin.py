@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from config import db, logger
 from helpers import get_current_user, require_role, serialize_doc
 from models.admin import VocabularyUpdate, FieldSetUpdate
+from helpers import DEFAULT_PERMISSIONS, ALL_PERMISSIONS, get_user_permissions
 
 router = APIRouter()
 
@@ -84,3 +85,79 @@ async def update_user(user_id: str, request: Request):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User updated"}
+
+
+# ── RBAC: Custom Roles & Permissions ──
+@router.get("/admin/permissions/all")
+async def list_all_permissions(request: Request):
+    await require_role(request, ["ADMIN"])
+    return {"permissions": ALL_PERMISSIONS, "default_roles": DEFAULT_PERMISSIONS}
+
+@router.get("/admin/roles")
+async def list_custom_roles(request: Request):
+    user = await require_role(request, ["ADMIN"])
+    tid = user.get("tenant_id")
+    custom_roles = await db.custom_roles.find({"tenant_id": tid}).to_list(20)
+    result = []
+    for role_name, perms in DEFAULT_PERMISSIONS.items():
+        custom = next((r for r in custom_roles if r.get("role_name") == role_name), None)
+        result.append({
+            "role_name": role_name,
+            "permissions": serialize_doc(custom).get("permissions", perms) if custom else perms,
+            "is_custom": bool(custom),
+            "id": serialize_doc(custom).get("id") if custom else None,
+        })
+    return result
+
+@router.put("/admin/roles/{role_name}")
+async def update_role_permissions(role_name: str, request: Request):
+    admin = await require_role(request, ["ADMIN"])
+    tid = admin.get("tenant_id")
+    body = await request.json()
+    permissions = body.get("permissions", [])
+    # Validate permissions
+    invalid = [p for p in permissions if p not in ALL_PERMISSIONS]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Invalid permissions: {', '.join(invalid)}")
+    existing = await db.custom_roles.find_one({"tenant_id": tid, "role_name": role_name})
+    if existing:
+        await db.custom_roles.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {"permissions": permissions, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    else:
+        await db.custom_roles.insert_one({
+            "tenant_id": tid, "role_name": role_name,
+            "permissions": permissions,
+            "created_by": admin["id"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    return {"message": f"Permissions updated for {role_name}", "permissions": permissions}
+
+@router.delete("/admin/roles/{role_name}")
+async def reset_role_permissions(role_name: str, request: Request):
+    admin = await require_role(request, ["ADMIN"])
+    tid = admin.get("tenant_id")
+    result = await db.custom_roles.delete_one({"tenant_id": tid, "role_name": role_name})
+    if result.deleted_count == 0:
+        return {"message": f"No custom permissions for {role_name} (using defaults)"}
+    return {"message": f"Permissions reset to defaults for {role_name}"}
+
+@router.get("/admin/users/{user_id}/permissions")
+async def get_user_perms(user_id: str, request: Request):
+    admin = await require_role(request, ["ADMIN"])
+    target = await db.users.find_one({"_id": ObjectId(user_id), "tenant_id": admin.get("tenant_id")})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    perms = await get_user_permissions(serialize_doc(target))
+    return {"user_id": user_id, "role": target.get("role"), "permissions": perms}
+
+# ── Email settings ──
+@router.get("/admin/email-settings")
+async def get_email_settings(request: Request):
+    user = await require_role(request, ["ADMIN"])
+    from config import SENDGRID_API_KEY, SENDER_EMAIL
+    return {
+        "sendgrid_configured": bool(SENDGRID_API_KEY),
+        "sender_email": SENDER_EMAIL if SENDGRID_API_KEY else None,
+    }

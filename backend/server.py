@@ -77,6 +77,7 @@ async def startup():
     await db.notifications.create_index([("tenant_id", 1), ("user_id", 1), ("is_read", 1)])
     await db.messages.create_index([("tenant_id", 1), ("from_user_id", 1)])
     await db.messages.create_index([("tenant_id", 1), ("to_user_id", 1)])
+    await db.custom_roles.create_index([("tenant_id", 1), ("role_name", 1)], unique=True)
 
     # Init services
     try:

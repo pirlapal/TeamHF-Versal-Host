@@ -3,7 +3,7 @@ from bson import ObjectId
 from datetime import datetime, timezone
 
 from config import db
-from helpers import get_current_user, require_role, serialize_doc, create_notification
+from helpers import get_current_user, require_role, serialize_doc, send_notification_email
 from models.notifications import MessageCreate, MessageReply
 
 router = APIRouter()
@@ -44,7 +44,7 @@ async def send_message(data: MessageCreate, request: Request):
     msg_doc["id"] = str(result.inserted_id)
     msg_doc.pop("_id", None)
     # Notify recipient
-    await create_notification(tid, data.to_user_id, "new_message",
+    await send_notification_email(tid, data.to_user_id, "new_message",
         f"Message from {user.get('name', 'Someone')}", data.subject[:50], "/messages")
     return msg_doc
 
@@ -84,7 +84,7 @@ async def reply_message(message_id: str, data: MessageReply, request: Request):
     # Notify the other party
     other_id = msg.get("from_user_id") if msg.get("to_user_id") == user["id"] else msg.get("to_user_id")
     if other_id:
-        await create_notification(user.get("tenant_id"), other_id, "message_reply",
+        await send_notification_email(user.get("tenant_id"), other_id, "message_reply",
             f"Reply from {user.get('name', 'Someone')}", data.body[:50], "/messages")
     return {"message": "Reply sent"}
 

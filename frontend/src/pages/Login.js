@@ -84,6 +84,32 @@ export default function Login() {
               <Link to="/onboard" className="text-[#F97316] hover:underline font-semibold" data-testid="onboard-link">Create account</Link>
             </p>
           </div>
+
+          {/* Demo Login Shortcuts */}
+          <div className="border-t border-[#F3F4F6] pt-4 space-y-2">
+            <p className="text-[10px] uppercase tracking-wider text-[#9CA3AF] font-bold text-center">Quick Demo Login</p>
+            <div className="grid grid-cols-3 gap-2">
+              <button type="button" onClick={() => { setEmail("admin@caseflow.io"); setPassword("admin123"); }}
+                className="p-2 rounded-lg border border-[#E5E7EB] hover:border-[#F97316] hover:bg-[#FFF7ED] transition-all text-center"
+                data-testid="demo-login-admin">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#F97316] to-[#FB923C] flex items-center justify-center mx-auto mb-1"><span className="text-white text-[9px] font-bold">A</span></div>
+                <span className="text-[10px] font-bold text-[#1F2937]">Admin</span>
+              </button>
+              <button type="button" onClick={() => { setEmail("caseworker@demo.caseflow.io"); setPassword("demo1234"); }}
+                className="p-2 rounded-lg border border-[#E5E7EB] hover:border-[#14B8A6] hover:bg-[#F0FDFA] transition-all text-center"
+                data-testid="demo-login-worker">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#14B8A6] to-[#2DD4BF] flex items-center justify-center mx-auto mb-1"><span className="text-white text-[9px] font-bold">CW</span></div>
+                <span className="text-[10px] font-bold text-[#1F2937]">Case Worker</span>
+              </button>
+              <button type="button" onClick={() => { setEmail("volunteer@demo.caseflow.io"); setPassword("demo1234"); }}
+                className="p-2 rounded-lg border border-[#E5E7EB] hover:border-[#6366F1] hover:bg-[#EEF2FF] transition-all text-center"
+                data-testid="demo-login-volunteer">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#6366F1] to-[#818CF8] flex items-center justify-center mx-auto mb-1"><span className="text-white text-[9px] font-bold">V</span></div>
+                <span className="text-[10px] font-bold text-[#1F2937]">Volunteer</span>
+              </button>
+            </div>
+            <p className="text-[9px] text-[#D1D5DB] text-center">Seed demo data first from Admin Settings</p>
+          </div>
         </div>
       </div>
 

@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserPlus, Save, Database, Link, Copy, CheckCircle, KeyRound, Trash2 } from "lucide-react";
+import { UserPlus, Save, Database, Link, Copy, CheckCircle, KeyRound, Trash2, Shield, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function AdminSettings() {
   const [vocab, setVocab] = useState([]);
@@ -26,15 +27,23 @@ export default function AdminSettings() {
   const [shareableLink, setShareableLink] = useState(null);
   const [copied, setCopied] = useState(false);
   const [demoUsers, setDemoUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [editingRole, setEditingRole] = useState(null);
+  const [editingPerms, setEditingPerms] = useState([]);
+  const [allPerms, setAllPerms] = useState([]);
+  const [savingRole, setSavingRole] = useState(false);
+  const [emailSettings, setEmailSettings] = useState({});
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [vocabRes, usersRes, invitesRes, fsRes] = await Promise.all([
+        const [vocabRes, usersRes, invitesRes, fsRes, permsRes, rolesRes, emailRes] = await Promise.all([
           api.get("/admin/vocabulary"), api.get("/admin/users"), api.get("/invites"), api.get("/admin/field-sets"),
+          api.get("/admin/permissions/all"), api.get("/admin/roles"), api.get("/admin/email-settings"),
         ]);
         setVocab(vocabRes.data); setUsers(usersRes.data); setInvites(invitesRes.data); setFieldSets(fsRes.data);
+        setAllPerms(permsRes.data.permissions || []); setRoles(rolesRes.data || []); setEmailSettings(emailRes.data || {});
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
     };
@@ -73,7 +82,7 @@ export default function AdminSettings() {
   };
 
   const handleClearData = async () => {
-    if (!window.confirm("Are you sure? This will delete ALL clients, services, visits, outcomes, payment records, and demo users for your organization. This cannot be undone.")) return;
+    if (!window.confirm("Are you sure? This will delete ALL clients, services, visits, outcomes, payment records, and notifications for your organization. Demo login accounts will be preserved. This cannot be undone.")) return;
     setClearing(true);
     try {
       const { data } = await api.post("/demo/clear");
@@ -86,6 +95,44 @@ export default function AdminSettings() {
   const handleRoleChange = async (userId, role) => {
     try { await api.patch(`/admin/users/${userId}`, { role }); setUsers(users.map((u) => (u.id === userId ? { ...u, role } : u))); toast.success("Role updated"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
   };
+
+  const startEditRole = (role) => {
+    setEditingRole(role.role_name);
+    setEditingPerms([...role.permissions]);
+  };
+
+  const togglePerm = (perm) => {
+    setEditingPerms(prev => prev.includes(perm) ? prev.filter(p => p !== perm) : [...prev, perm]);
+  };
+
+  const handleSaveRolePerms = async () => {
+    setSavingRole(true);
+    try {
+      await api.put(`/admin/roles/${editingRole}`, { permissions: editingPerms });
+      toast.success(`Permissions saved for ${editingRole}`);
+      const { data } = await api.get("/admin/roles");
+      setRoles(data);
+      setEditingRole(null);
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    finally { setSavingRole(false); }
+  };
+
+  const handleResetRolePerms = async (roleName) => {
+    try {
+      await api.delete(`/admin/roles/${roleName}`);
+      toast.success(`${roleName} reset to defaults`);
+      const { data } = await api.get("/admin/roles");
+      setRoles(data);
+      setEditingRole(null);
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+  };
+
+  const permCategories = {};
+  allPerms.forEach(p => {
+    const [cat] = p.split(".");
+    if (!permCategories[cat]) permCategories[cat] = [];
+    permCategories[cat].push(p);
+  });
 
   if (loading) return <div className="space-y-4">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>;
 
@@ -103,6 +150,12 @@ export default function AdminSettings() {
           <TabsTrigger value="vocabulary" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">Vocabulary</TabsTrigger>
           <TabsTrigger value="fields" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">Field Sets</TabsTrigger>
           <TabsTrigger value="demo" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">Demo Mode</TabsTrigger>
+          <TabsTrigger value="permissions" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">
+            <Shield className="h-3.5 w-3.5 mr-1" />Permissions
+          </TabsTrigger>
+          <TabsTrigger value="email" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">
+            <Mail className="h-3.5 w-3.5 mr-1" />Email
+          </TabsTrigger>
         </TabsList>
 
         {/* Users Tab */}
@@ -244,6 +297,137 @@ export default function AdminSettings() {
                   <div><span className="font-bold text-[#1F2937]">Volunteer</span><span className="text-[#9CA3AF] ml-2">(Alex Rivera)</span></div>
                   <div className="font-mono text-[#6B7280]">volunteer@demo.caseflow.io / demo1234</div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Permissions Tab */}
+        <TabsContent value="permissions" className="mt-4 space-y-4">
+          <div className="bg-white border border-[#E8E8E8] rounded-xl p-6" data-testid="permissions-section">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-[#EEF2FF] flex items-center justify-center"><Shield className="h-5 w-5 text-[#6366F1]" /></div>
+              <div>
+                <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937]">Role Permissions (RBAC)</h3>
+                <p className="text-xs text-[#9CA3AF]">Customize what each role can access. Changes override defaults.</p>
+              </div>
+            </div>
+
+            {editingRole ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-[#1F2937]">Editing: <span className="text-[#F97316]">{editingRole.replace("_", " ")}</span></h4>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => handleResetRolePerms(editingRole)} className="text-[#9CA3AF] text-xs rounded-lg" data-testid="reset-role-btn">Reset to Default</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditingRole(null)} className="text-[#9CA3AF] text-xs rounded-lg">Cancel</Button>
+                    <Button size="sm" onClick={handleSaveRolePerms} disabled={savingRole}
+                      className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white text-xs rounded-lg font-bold gap-1" data-testid="save-perms-btn">
+                      {savingRole ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Save className="h-3 w-3" /> Save</>}
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(permCategories).map(([cat, perms]) => (
+                    <div key={cat} className="border border-[#E8E8E8] rounded-lg p-3">
+                      <h5 className="text-xs font-bold uppercase tracking-wider text-[#9CA3AF] mb-2">{cat}</h5>
+                      <div className="space-y-1.5">
+                        {perms.map(p => {
+                          const action = p.split(".")[1];
+                          return (
+                            <label key={p} className="flex items-center gap-2 cursor-pointer" data-testid={`perm-${p}`}>
+                              <Checkbox checked={editingPerms.includes(p)} onCheckedChange={() => togglePerm(p)}
+                                className="border-[#D1D5DB] data-[state=checked]:bg-[#F97316] data-[state=checked]:border-[#F97316]" />
+                              <span className="text-xs text-[#4B5563]">{action}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[#9CA3AF]">Selected: {editingPerms.length}/{allPerms.length} permissions</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {roles.map(role => (
+                  <div key={role.role_name} className="flex items-center justify-between p-4 border border-[#E8E8E8] rounded-xl hover:border-[#F97316]/30 transition-colors" data-testid={`role-card-${role.role_name}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                        role.role_name === "ADMIN" ? "bg-[#FFF7ED]" : role.role_name === "CASE_WORKER" ? "bg-[#F0FDFA]" : "bg-[#EEF2FF]"
+                      }`}>
+                        <Shield className={`h-4 w-4 ${
+                          role.role_name === "ADMIN" ? "text-[#F97316]" : role.role_name === "CASE_WORKER" ? "text-[#14B8A6]" : "text-[#6366F1]"
+                        }`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-[#1F2937]">{role.role_name.replace("_", " ")}</p>
+                        <p className="text-xs text-[#9CA3AF]">{role.permissions.length} permissions {role.is_custom && <span className="text-[#F97316] font-bold">(customized)</span>}</p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => startEditRole(role)}
+                      className="border-[#E5E7EB] text-[#6B7280] hover:border-[#F97316] hover:text-[#F97316] text-xs rounded-lg" data-testid={`edit-role-${role.role_name}`}>
+                      Edit Permissions
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Email Settings Tab */}
+        <TabsContent value="email" className="mt-4 space-y-4">
+          <div className="bg-white border border-[#E8E8E8] rounded-xl p-6" data-testid="email-settings-section">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-[#ECFDF5] flex items-center justify-center"><Mail className="h-5 w-5 text-[#10B981]" /></div>
+              <div>
+                <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937]">Email Notifications</h3>
+                <p className="text-xs text-[#9CA3AF]">Configure SendGrid for email delivery</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border space-y-3" style={{ borderColor: emailSettings.sendgrid_configured ? "#A7F3D0" : "#FDE68A", backgroundColor: emailSettings.sendgrid_configured ? "#ECFDF5" : "#FFFBEB" }}>
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${emailSettings.sendgrid_configured ? "bg-[#10B981]" : "bg-[#F59E0B]"}`} />
+                <span className={`text-sm font-bold ${emailSettings.sendgrid_configured ? "text-[#10B981]" : "text-[#F59E0B]"}`}>
+                  {emailSettings.sendgrid_configured ? "SendGrid Connected" : "SendGrid Not Configured"}
+                </span>
+              </div>
+              {emailSettings.sendgrid_configured ? (
+                <p className="text-xs text-[#6B7280]">Emails are being sent from <span className="font-mono font-bold">{emailSettings.sender_email}</span></p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-[#6B7280]">Notifications are currently delivered in-app only. To enable email delivery:</p>
+                  <ol className="text-xs text-[#6B7280] space-y-1 list-decimal list-inside">
+                    <li>Sign up at <span className="font-mono text-[#F97316]">sendgrid.com</span> and create an API key</li>
+                    <li>Add <span className="font-mono text-[#1F2937]">SENDGRID_API_KEY</span> and <span className="font-mono text-[#1F2937]">SENDER_EMAIL</span> to your environment variables</li>
+                    <li>Restart the application</li>
+                  </ol>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">Email Triggers</h4>
+              <div className="space-y-2">
+                {[
+                  { event: "New Client Created", desc: "Notify admins when a new client is added" },
+                  { event: "Visit Scheduled", desc: "Notify team when a visit is booked" },
+                  { event: "Payment Request Sent", desc: "Email the client with payment details" },
+                  { event: "Payment Received", desc: "Notify the requester when marked as paid" },
+                  { event: "New Message", desc: "Notify recipient of new team messages" },
+                  { event: "Client Onboarded", desc: "Notify admins when wizard onboarding completes" },
+                ].map((trigger, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-[#FAFAF8] rounded-lg">
+                    <div>
+                      <p className="text-xs font-semibold text-[#1F2937]">{trigger.event}</p>
+                      <p className="text-[10px] text-[#9CA3AF]">{trigger.desc}</p>
+                    </div>
+                    <Badge variant="outline" className={`text-[9px] rounded-full ${emailSettings.sendgrid_configured ? "border-[#A7F3D0] text-[#10B981] bg-[#ECFDF5]" : "border-[#E5E7EB] text-[#9CA3AF]"}`}>
+                      {emailSettings.sendgrid_configured ? "Email + In-app" : "In-app only"}
+                    </Badge>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

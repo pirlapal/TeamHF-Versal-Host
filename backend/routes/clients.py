@@ -6,7 +6,7 @@ import csv
 import io
 
 from config import db
-from helpers import get_current_user, require_role, serialize_doc, create_notification
+from helpers import get_current_user, require_role, serialize_doc, send_notification_email
 from models.clients import ClientCreate, ClientUpdate, ClientWizardCreate
 
 router = APIRouter()
@@ -57,7 +57,7 @@ async def create_client(data: ClientCreate, request: Request):
     admins = await db.users.find({"tenant_id": user.get("tenant_id"), "role": "ADMIN"}).to_list(20)
     for admin in admins:
         if str(admin["_id"]) != user["id"]:
-            await create_notification(user.get("tenant_id"), str(admin["_id"]), "client_created",
+            await send_notification_email(user.get("tenant_id"), str(admin["_id"]), "client_created",
                 f"New client: {data.name}", f"{user.get('name')} added a new client", f"/clients/{client_doc['id']}")
     return client_doc
 
@@ -155,7 +155,7 @@ async def create_client_wizard(data: ClientWizardCreate, request: Request):
     admins = await db.users.find({"tenant_id": tid, "role": "ADMIN"}).to_list(20)
     for admin in admins:
         if str(admin["_id"]) != user["id"]:
-            await create_notification(tid, str(admin["_id"]), "client_onboarded",
+            await send_notification_email(tid, str(admin["_id"]), "client_onboarded",
                 f"Client onboarded: {name.strip()}", f"{user.get('name')} onboarded a new client via wizard", f"/clients/{cid}")
     return {"client": client_doc, "message": f"Client {name.strip()} onboarded successfully"}
 

@@ -3,7 +3,7 @@ from bson import ObjectId
 from datetime import datetime, timezone
 
 from config import db, STRIPE_API_KEY, logger
-from helpers import get_current_user, require_role, serialize_doc, create_notification
+from helpers import get_current_user, require_role, serialize_doc, send_notification_email
 from models.payments import PaymentRequestCreate
 
 router = APIRouter()
@@ -30,6 +30,16 @@ async def create_payment_request(data: PaymentRequestCreate, request: Request):
     result = await db.payment_requests.insert_one(req_doc)
     req_doc["id"] = str(result.inserted_id)
     req_doc.pop("_id", None)
+    # Send email to client if SendGrid is configured
+    from helpers import send_email, build_email_html
+    html = build_email_html(
+        "Payment Request",
+        f"You have a payment request from {user.get('name', 'CaseFlow')}.<br><br>"
+        f"<strong>Amount:</strong> ${data.amount:.2f}<br>"
+        f"<strong>Description:</strong> {data.description}<br>"
+        f"<strong>Due Date:</strong> {data.due_date or 'N/A'}",
+    )
+    send_email(data.client_email, f"Payment Request: ${data.amount:.2f}", html)
     return req_doc
 
 @router.get("/payments/requests")
@@ -59,7 +69,7 @@ async def update_payment_request(request_id: str, request: Request):
     if update_data.get("status") == "PAID":
         req = await db.payment_requests.find_one({"_id": ObjectId(request_id)})
         if req and req.get("created_by"):
-            await create_notification(user.get("tenant_id"), req["created_by"], "payment_received",
+            await send_notification_email(user.get("tenant_id"), req["created_by"], "payment_received",
                 f"Payment received: ${req.get('amount', 0):.2f}", f"Payment from {req.get('client_name', 'Unknown')} marked as paid", "/payments")
     return {"message": "Payment request updated"}
 

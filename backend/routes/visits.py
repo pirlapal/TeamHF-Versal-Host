@@ -3,7 +3,7 @@ from bson import ObjectId
 from datetime import datetime, timezone
 
 from config import db
-from helpers import get_current_user, require_role, serialize_doc, create_notification
+from helpers import get_current_user, require_role, serialize_doc, send_notification_email
 from models.services import VisitCreate, VisitUpdate
 
 router = APIRouter()
@@ -50,7 +50,7 @@ async def create_visit(data: VisitCreate, request: Request):
     admins = await db.users.find({"tenant_id": user.get("tenant_id"), "role": {"$in": ["ADMIN", "CASE_WORKER"]}}).to_list(20)
     for a in admins:
         if str(a["_id"]) != user["id"]:
-            await create_notification(user.get("tenant_id"), str(a["_id"]), "visit_scheduled",
+            await send_notification_email(user.get("tenant_id"), str(a["_id"]), "visit_scheduled",
                 f"Visit scheduled: {doc['client_name']}", f"{user.get('name')} scheduled a visit for {data.date[:10]}", f"/calendar")
     return doc
 

@@ -5,7 +5,7 @@ import random
 import uuid
 
 from config import db, logger
-from helpers import hash_password, require_role, create_notification
+from helpers import hash_password, require_role, send_notification_email
 
 router = APIRouter()
 
@@ -113,7 +113,7 @@ async def seed_demo_data(request: Request):
         ("client_onboarded", "New client onboarded", "A new client was added via the wizard"),
     ]
     for ntype, title, msg in notif_types:
-        await create_notification(tid, user["id"], ntype, title, msg, "/dashboard")
+        await send_notification_email(tid, user["id"], ntype, title, msg, "/dashboard")
 
     return {
         "message": f"Demo data created: {len(created_clients)} clients with services, outcomes, visits, and {payment_count} payment requests.",
@@ -139,8 +139,5 @@ async def clear_demo_data(request: Request):
     deleted["payment_transactions"] = (await db.payment_transactions.delete_many({"tenant_id": tid})).deleted_count
     deleted["notifications"] = (await db.notifications.delete_many({"tenant_id": tid})).deleted_count
     deleted["messages"] = (await db.messages.delete_many({"tenant_id": tid})).deleted_count
-    deleted["demo_users"] = (await db.users.delete_many({
-        "tenant_id": tid, "email": {"$in": ["caseworker@demo.caseflow.io", "volunteer@demo.caseflow.io"]}
-    })).deleted_count
     total = sum(deleted.values())
     return {"message": f"Cleared {total} records from your organization", "details": deleted}
