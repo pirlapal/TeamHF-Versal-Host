@@ -124,7 +124,7 @@ export default function AICopilot({ onClose }) {
       </ScrollArea>
 
       {/* Input */}
-      <div className="p-3 border-t border-white/10">
+      <div className="p-3 border-t border-white/10 relative z-[60]">
         <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
           <Input
             value={input}
