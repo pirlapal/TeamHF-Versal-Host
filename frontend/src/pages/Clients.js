@@ -27,7 +27,7 @@ export default function Clients() {
   const [page, setPage] = useState(1);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [duplicateWarning, setDuplicateWarning] = useState(null);
@@ -35,7 +35,7 @@ export default function Clients() {
   const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/clients", { params: { search, page, page_size: 25, status: statusFilter, date_from: dateFrom, date_to: dateTo } });
+      const { data } = await api.get("/clients", { params: { search, page, page_size: 25, status: statusFilter === "all" ? "" : statusFilter, date_from: dateFrom, date_to: dateTo } });
       setClients(data.data || []);
       setPagination(data.pagination || { page: 1, total_pages: 1, total_count: 0 });
     } catch (err) { console.error(err); }
@@ -134,7 +134,7 @@ export default function Clients() {
           <Input placeholder="Search clients by name, email, phone..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-10 bg-white border-[#E5E7EB] text-[#1F2937] placeholder:text-[#D1D5DB] h-10 rounded-lg" data-testid="client-search-input" />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === "all" ? "" : v); setPage(1); }}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-32 h-10 bg-white border-[#E5E7EB] text-[#6B7280] rounded-lg text-xs" data-testid="status-filter">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
@@ -148,8 +148,8 @@ export default function Clients() {
           placeholder="From" className="w-36 h-10 bg-white border-[#E5E7EB] text-[#6B7280] rounded-lg text-xs" data-testid="date-from-filter" />
         <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }}
           placeholder="To" className="w-36 h-10 bg-white border-[#E5E7EB] text-[#6B7280] rounded-lg text-xs" data-testid="date-to-filter" />
-        {(statusFilter || dateFrom || dateTo) && (
-          <Button variant="ghost" size="sm" onClick={() => { setStatusFilter(""); setDateFrom(""); setDateTo(""); setPage(1); }}
+        {(statusFilter !== "all" || dateFrom || dateTo) && (
+          <Button variant="ghost" size="sm" onClick={() => { setStatusFilter("all"); setDateFrom(""); setDateTo(""); setPage(1); }}
             className="text-[#9CA3AF] text-xs h-10 rounded-lg" data-testid="clear-filters-btn">Clear filters</Button>
         )}
       </div>

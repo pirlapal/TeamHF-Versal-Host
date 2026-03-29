@@ -39,14 +39,24 @@ Build a futuristic web application with all SaaS features for nonprofit case man
 - Backend refactoring (14 modular routes), PDF/CSV reporting, notification system, team messaging, enhanced dashboard
 
 ### Phase 6: Bug Fixes + Email + RBAC
-- **Bug Fix**: Clear All Data preserves demo user accounts (caseworker/volunteer survive)
-- **Bug Fix**: Demo login quick buttons on login page (Admin, Case Worker, Volunteer)
-- **Email Notifications**: SendGrid integration with graceful fallback. 6 triggers: new client, visit scheduled, payment request, payment received, new message, client onboarded
-- **Advanced RBAC**: 35 granular permissions across 12 categories. Custom permission sets per role. Admin UI with checkbox grid editor, save/reset to defaults
+- Clear All Data preserves demo accounts, Demo login quick buttons
+- SendGrid email integration with graceful fallback (6 triggers)
+- Advanced RBAC: 35 granular permissions, custom permission sets per role
 
-## Test Results (Iteration 6)
-- Backend: 100% (15/15)
-- Frontend: 100%
+### Phase 7: Bug Fixes (Verified)
+- Activity Trend chart fixed (query by service_date/date instead of created_at)
+- Field Sets CRUD UI added (Add/Edit/Save field sets with types and required flags)
+- Role-based button visibility corrected (ADMIN/CASE_WORKER see action buttons, VOLUNTEER read-only)
+
+### Phase 8: P1 Requirements (NEW - March 2026)
+- **Dashboard Demographics Breakdown Chart (R27.1)**: Horizontal bar chart showing age_group/gender breakdown
+- **Advanced Client Filtering (R9.3)**: Status filter (Active/Pending), date range filters, phone search
+- **Visit Conflict Detection (R6.3)**: Warning when scheduling overlapping visits with 'Schedule Anyway' option
+- **Duplicate Client Detection (R4.5)**: Warning when creating client with matching email/phone with 'Create Anyway' option
+
+## Test Results
+- Iteration 7: Backend 100% (10/10), Frontend 100%
+- Iteration 8: Backend 100% (27/27), Frontend 95% (minor Select display fixed)
 
 ## Credentials
 - Admin: admin@caseflow.io / admin123
@@ -57,3 +67,15 @@ Build a futuristic web application with all SaaS features for nonprofit case man
 - Admin: Dashboard, Clients, Calendar, Payments, Reports, Messages, Settings (7 items)
 - Case Worker: Dashboard, Clients, Calendar, Payments, Messages (5 items)
 - Volunteer: Dashboard, Clients, Calendar, Payments (4 items)
+
+## Remaining P1 Tasks
+- R5.4: Service Log 72-hour edit window enforcement
+- R27.7: Dashboard CSV export button
+- R35.4: AI-generated narrative reports
+
+## P2/Backlog
+- Twilio SMS Integration (SMS alerts alongside SendGrid email)
+- R16: Enhanced AI features (summarization, tag suggestions, semantic search)
+- R13: Audit trail / activity logging
+- i18n / localization support
+- WCAG 2.2 AA accessibility compliance
