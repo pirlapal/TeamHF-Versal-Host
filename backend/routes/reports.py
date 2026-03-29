@@ -124,50 +124,35 @@ async def generate_narrative_report(request: Request):
         services = await db.service_logs.find({"client_id": cid, "tenant_id": tid}).sort("service_date", -1).to_list(20)
         outcomes = await db.outcomes.find({"client_id": cid, "tenant_id": tid}).to_list(20)
         visits = await db.visits.find({"client_id": cid, "tenant_id": tid}).sort("date", -1).to_list(20)
-        svc_summary = f"{len(services)} service(s)" if services else "No services recorded"
-        if services:
-            types = set(s.get("service_type", "") for s in services if s.get("service_type"))
-            svc_summary += f" across {', '.join(list(types)[:5])}"
-            latest = services[0].get("service_date", "N/A")
-            svc_summary += f". Most recent: {latest}"
-        out_summary = f"{len(outcomes)} outcome goal(s)" if outcomes else "No outcome goals set"
-        if outcomes:
-            achieved = sum(1 for o in outcomes if o.get("status") == "ACHIEVED")
-            in_prog = sum(1 for o in outcomes if o.get("status") == "IN_PROGRESS")
-            out_summary += f" ({achieved} achieved, {in_prog} in progress)"
-        visit_summary = f"{len(visits)} visit(s)" if visits else "No visits scheduled"
-        if visits:
-            completed = sum(1 for v in visits if v.get("status") == "COMPLETED")
-            visit_summary += f" ({completed} completed)"
-        # Try AI generation
-        narrative_text = None
-        try:
-            from helpers import hf_client, hf_generate
-            if hf_client:
-                ctx = f"Client: {cname}\nServices: {svc_summary}\nOutcomes: {out_summary}\nVisits: {visit_summary}"
-                if c.get("notes"):
-                    ctx += f"\nNotes: {c['notes']}"
-                prompt = f"<s>[INST] Write a professional 3-4 sentence case narrative summary for a nonprofit case management report about this client:\n{ctx}\n[/INST]"
-                result = await hf_generate(prompt, 300)
-                if result and len(result.strip()) > 20:
-                    narrative_text = result.strip()
-        except Exception as e:
-            logger.warning(f"AI narrative generation failed for {cname}: {e}")
-        if not narrative_text:
-            # Fallback narrative
-            status_text = "active" if not c.get("pending") else "pending approval"
-            narrative_text = (
-                f"{cname} is currently an {status_text} client in the program. "
-                f"They have {svc_summary}. "
-                f"Regarding outcomes, there are {out_summary}. "
-                f"In terms of engagement, the client has {visit_summary}. "
-            )
-            if c.get("notes"):
-                narrative_text += f"Additional notes: {c['notes']}"
+
+        # Build structured context for this client
+        from routes.ai import build_client_context as _bc, format_context_text, llm_generate, build_data_summary
+        ctx = {
+            "name": cname,
+            "email": c.get("email", ""),
+            "phone": c.get("phone", ""),
+            "status": "Active" if not c.get("pending") else "Pending",
+            "notes": c.get("notes", ""),
+            "demographics": c.get("demographics", {}),
+            "services": [{"type": s.get("service_type",""), "date": s.get("service_date",""), "provider": s.get("provider_name",""), "notes": s.get("notes","")} for s in services],
+            "outcomes": [{"goal": o.get("goal_description",""), "status": o.get("status",""), "target": o.get("target_date","")} for o in outcomes],
+            "visits": [{"date": v.get("date",""), "status": v.get("status",""), "duration": v.get("duration",60), "notes": v.get("notes","")} for v in visits],
+        }
+        ctx_text = format_context_text(ctx)
+
+        # Try LLM
+        narrative_text = await llm_generate(
+            "You are a professional case management report writer for a nonprofit organization. Write clear, concise narrative summaries.",
+            f"Write a professional 3-5 sentence case narrative summary for this client. Focus on their service engagement, outcome progress, and any notable patterns:\n\n{ctx_text}",
+            400,
+        )
+        if not narrative_text or len(narrative_text.strip()) < 20:
+            narrative_text = build_data_summary(ctx)
+
         narratives.append({
             "client_id": cid,
             "client_name": cname,
-            "narrative": narrative_text,
+            "narrative": narrative_text.strip(),
             "stats": {
                 "services": len(services),
                 "outcomes": len(outcomes),

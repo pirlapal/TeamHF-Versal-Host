@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,14 @@ const TEMPLATE_ICONS = { "create_client": UserPlus, "schedule_visit": CalendarPl
 
 export default function AICopilot({ onClose }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Auto-detect client_id from URL (e.g. /clients/abc123)
+  const getClientIdFromUrl = () => {
+    const match = location.pathname.match(/\/clients\/([a-f0-9]{24})/);
+    return match ? match[1] : "";
+  };
+  const activeClientId = getClientIdFromUrl();
   const [messages, setMessages] = useState([
     { role: "ai", content: "Hi there! I'm your AI assistant. I can help with case summaries, suggestions, and I can also help you create clients, schedule visits, and log services. Try a quick action or pick a template below!" }
   ]);
@@ -58,7 +66,7 @@ export default function AICopilot({ onClose }) {
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
     try {
-      const { data } = await api.post("/ai/copilot", { message: text });
+      const { data } = await api.post("/ai/copilot", { message: text, client_id: activeClientId });
       let aiContent = "";
       if (data.type === "tags" && Array.isArray(data.content)) aiContent = `Suggested tags: ${data.content.join(", ")}`;
       else if (data.type === "actions" && Array.isArray(data.content)) aiContent = `Recommended actions:\n${data.content.map((a, i) => `${i + 1}. ${a}`).join("\n")}`;
@@ -180,10 +188,19 @@ export default function AICopilot({ onClose }) {
                   <Sparkles className="h-3 w-3 text-white" />
                 </div>
               )}
-              <div className={`max-w-[80%] p-3 rounded-xl text-sm whitespace-pre-wrap ${
-                msg.role === "user" ? "bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white" : "bg-[#F3F4F6] text-[#374151]"
+              <div className={`max-w-[80%] p-3 rounded-xl text-sm ${
+                msg.role === "user" ? "bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white whitespace-pre-wrap" : "bg-[#F3F4F6] text-[#374151]"
               }`}>
-                {msg.content}
+                {msg.role === "ai" ? (
+                  <div className="prose prose-sm max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_strong]:text-[#1F2937] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-semibold"
+                    dangerouslySetInnerHTML={{ __html: msg.content
+                      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                      .replace(/\n- /g, '\n<br/>• ')
+                      .replace(/\n(\d+)\. /g, '\n<br/>$1. ')
+                      .replace(/\n{2,}/g, '<br/><br/>')
+                      .replace(/\n/g, '<br/>')
+                    }} />
+                ) : msg.content}
                 {msg.model && <p className="text-[10px] mt-2 font-mono opacity-60">{msg.model}</p>}
               </div>
               {msg.role === "user" && (
