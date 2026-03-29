@@ -1,20 +1,6 @@
 {
-  "version": 2,
-  "buildCommand": "cd frontend && yarn install && yarn build",
+  "buildCommand": "cd frontend && CI=true yarn build",
   "outputDirectory": "frontend/build",
-  "framework": null,
-  "routes": [
-    {
-      "src": "/static/(.*)",
-      "dest": "/static/$1"
-    },
-    {
-      "src": "/(.*\\.(js|css|json|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot))",
-      "dest": "/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ]
+  "installCommand": "cd frontend && yarn install",
+  "devCommand": "cd frontend && yarn start"
 }
