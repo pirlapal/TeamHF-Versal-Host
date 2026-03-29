@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,50 +6,50 @@
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
-    --foreground: 240 5% 97%;
-    --card: 0 0% 8%;
-    --card-foreground: 240 5% 97%;
-    --popover: 0 0% 8%;
-    --popover-foreground: 240 5% 97%;
-    --primary: 220 100% 50%;
+    --background: 30 33% 98%;
+    --foreground: 220 20% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 16%;
+    --primary: 12 90% 64%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 10%;
-    --secondary-foreground: 240 5% 97%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 240 2% 65%;
-    --accent: 187 100% 50%;
-    --accent-foreground: 0 0% 4%;
-    --destructive: 348 100% 55%;
+    --secondary: 30 20% 94%;
+    --secondary-foreground: 220 20% 16%;
+    --muted: 30 20% 94%;
+    --muted-foreground: 220 10% 45%;
+    --accent: 168 72% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 17%;
-    --input: 0 0% 17%;
-    --ring: 220 100% 50%;
-    --chart-1: 220 100% 50%;
-    --chart-2: 187 100% 50%;
-    --chart-3: 145 100% 45%;
-    --chart-4: 52 100% 50%;
-    --chart-5: 348 100% 55%;
-    --radius: 0.125rem;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 12 90% 64%;
+    --chart-1: 12 90% 64%;
+    --chart-2: 168 72% 45%;
+    --chart-3: 45 93% 58%;
+    --chart-4: 220 70% 55%;
+    --chart-5: 280 60% 55%;
+    --radius: 0.625rem;
   }
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2A2A2D #0A0A0B;
+  scrollbar-color: #D1D5DB #FAFAF8;
 }
 
 body {
   margin: 0;
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0A0A0B;
-  color: #F9F9FB;
+  background-color: #FFF8F0;
+  color: #1F2937;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Nunito', sans-serif;
 }
 
 code, .font-mono {
@@ -71,30 +71,36 @@ code, .font-mono {
   }
 }
 
-/* Custom scrollbar for webkit */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0A0A0B; }
-::-webkit-scrollbar-thumb { background: #2A2A2D; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3F3F43; }
+::-webkit-scrollbar-track { background: #FFF8F0; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
-/* Glass morphism utility */
-.glass {
-  background: rgba(10, 10, 11, 0.7);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+/* Soft shadow utility */
+.card-soft {
+  background: #FFFFFF;
+  border: 1px solid #E8E8E8;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
 }
 
-/* Glow effects */
-.glow-blue { box-shadow: 0 0 20px rgba(0, 85, 255, 0.15); }
-.glow-cyan { box-shadow: 0 0 20px rgba(0, 229, 255, 0.15); }
+/* Warm glow */
+.glow-coral { box-shadow: 0 0 24px rgba(249, 115, 22, 0.12); }
+.glow-teal { box-shadow: 0 0 24px rgba(20, 184, 166, 0.12); }
 
 /* Stagger animation */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-in { animation: fadeInUp 0.3s ease forwards; }
+.animate-fade-in { animation: fadeInUp 0.35s ease forwards; }
 .stagger-1 { animation-delay: 0.05s; }
 .stagger-2 { animation-delay: 0.1s; }
 .stagger-3 { animation-delay: 0.15s; }
 .stagger-4 { animation-delay: 0.2s; }
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }

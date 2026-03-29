@@ -773,7 +773,7 @@ async def ai_copilot(data: AICopilotMessage, request: Request):
     # Try Hugging Face first
     if hf_client:
         try:
-            prompt = f"<s>[INST] You are a helpful case management assistant for a nonprofit organization. "
+            prompt = "<s>[INST] You are a helpful case management assistant for a nonprofit organization. "
             if client_context:
                 prompt += f"Here is context about a client:\n{client_context}\n\n"
             prompt += f"User request: {data.message}\n\nProvide a concise, helpful response. [/INST]"
@@ -1121,6 +1121,32 @@ async def seed_demo_data(request: Request):
         raise HTTPException(status_code=400, detail="Too many existing clients. Archive or delete some first.")
     created_clients = []
     now = datetime.now(timezone.utc)
+    # Create demo case worker user
+    demo_worker_email = "caseworker@demo.caseflow.io"
+    demo_worker_password = "demo1234"
+    existing_worker = await db.users.find_one({"email": demo_worker_email})
+    if not existing_worker:
+        await db.users.insert_one({
+            "email": demo_worker_email,
+            "password_hash": hash_password(demo_worker_password),
+            "name": "Sarah Thompson",
+            "role": "CASE_WORKER",
+            "tenant_id": tid,
+            "created_at": now.isoformat(),
+        })
+    # Create demo volunteer user
+    demo_vol_email = "volunteer@demo.caseflow.io"
+    demo_vol_password = "demo1234"
+    existing_vol = await db.users.find_one({"email": demo_vol_email})
+    if not existing_vol:
+        await db.users.insert_one({
+            "email": demo_vol_email,
+            "password_hash": hash_password(demo_vol_password),
+            "name": "Alex Rivera",
+            "role": "VOLUNTEER",
+            "tenant_id": tid,
+            "created_at": now.isoformat(),
+        })
     for name in DEMO_NAMES:
         client_doc = {
             "name": name,
@@ -1176,7 +1202,14 @@ async def seed_demo_data(request: Request):
                 "case_worker_name": user.get("name", "Admin"),
                 "created_at": now.isoformat(),
             })
-    return {"message": f"Demo data created: {len(created_clients)} clients with services, outcomes, and visits", "client_count": len(created_clients)}
+    return {
+        "message": f"Demo data created: {len(created_clients)} clients with services, outcomes, and visits. Demo users also created.",
+        "client_count": len(created_clients),
+        "demo_users": [
+            {"email": demo_worker_email, "password": demo_worker_password, "role": "CASE_WORKER", "name": "Sarah Thompson"},
+            {"email": demo_vol_email, "password": demo_vol_password, "role": "VOLUNTEER", "name": "Alex Rivera"},
+        ]
+    }
 
 # ── Shareable Invite Links ──
 @api_router.post("/invites/shareable")
@@ -1208,6 +1241,104 @@ async def create_shareable_invite(data: ShareableLinkCreate, request: Request):
         "expires_at": invite_doc["expires_at"],
         "message": data.message or "",
     }
+
+# ── AI Action Templates ──
+AI_TEMPLATES = [
+    {
+        "id": "create_client",
+        "label": "Create New Client",
+        "description": "Add a new client to the system with basic information",
+        "icon": "user-plus",
+        "fields": [
+            {"key": "name", "label": "Full Name", "type": "text", "required": True, "placeholder": "e.g. Maria Garcia"},
+            {"key": "email", "label": "Email", "type": "email", "required": False, "placeholder": "client@example.com"},
+            {"key": "phone", "label": "Phone", "type": "text", "required": False, "placeholder": "+1 (555) 000-0000"},
+            {"key": "address", "label": "Address", "type": "text", "required": False, "placeholder": "123 Main St"},
+            {"key": "notes", "label": "Notes", "type": "textarea", "required": False, "placeholder": "Initial notes about the client..."},
+        ],
+        "action": "POST /api/clients",
+    },
+    {
+        "id": "schedule_visit",
+        "label": "Schedule Visit",
+        "description": "Book a visit with an existing client",
+        "icon": "calendar-plus",
+        "fields": [
+            {"key": "client_id", "label": "Client", "type": "client_select", "required": True},
+            {"key": "date", "label": "Date & Time", "type": "datetime-local", "required": True},
+            {"key": "duration", "label": "Duration (min)", "type": "number", "required": True, "default": 60},
+            {"key": "notes", "label": "Visit Notes", "type": "textarea", "required": False, "placeholder": "Purpose of visit..."},
+        ],
+        "action": "POST /api/visits",
+    },
+    {
+        "id": "log_service",
+        "label": "Log Service",
+        "description": "Record a service provided to a client",
+        "icon": "clipboard-plus",
+        "fields": [
+            {"key": "client_id", "label": "Client", "type": "client_select", "required": True},
+            {"key": "service_date", "label": "Service Date", "type": "date", "required": True},
+            {"key": "service_type", "label": "Service Type", "type": "text", "required": True, "placeholder": "e.g. Housing Assistance"},
+            {"key": "provider_name", "label": "Provider Name", "type": "text", "required": True, "placeholder": "e.g. Dr. Smith"},
+            {"key": "notes", "label": "Notes", "type": "textarea", "required": False, "placeholder": "Session details..."},
+        ],
+        "action": "POST /api/clients/{client_id}/services",
+    },
+    {
+        "id": "add_outcome",
+        "label": "Add Outcome Goal",
+        "description": "Set a new outcome goal for a client",
+        "icon": "target",
+        "fields": [
+            {"key": "client_id", "label": "Client", "type": "client_select", "required": True},
+            {"key": "goal_description", "label": "Goal Description", "type": "text", "required": True, "placeholder": "e.g. Secure stable housing"},
+            {"key": "target_date", "label": "Target Date", "type": "date", "required": True},
+            {"key": "status", "label": "Status", "type": "select", "required": True, "options": ["NOT_STARTED", "IN_PROGRESS", "ACHIEVED", "NOT_ACHIEVED"], "default": "NOT_STARTED"},
+        ],
+        "action": "POST /api/clients/{client_id}/outcomes",
+    },
+]
+
+@api_router.get("/ai/templates")
+async def get_ai_templates(request: Request):
+    await require_role(request, ["ADMIN", "CASE_WORKER"])
+    return AI_TEMPLATES
+
+class AIGenerateForm(BaseModel):
+    template_id: str
+    context: Optional[str] = None
+
+@api_router.post("/ai/generate-form")
+async def ai_generate_form(data: AIGenerateForm, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    template = next((t for t in AI_TEMPLATES if t["id"] == data.template_id), None)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    prefill = {}
+    now = datetime.now(timezone.utc)
+    if data.template_id == "create_client":
+        prefill = {"name": "", "email": "", "phone": "", "address": "", "notes": ""}
+    elif data.template_id == "schedule_visit":
+        prefill = {"client_id": "", "date": (now + timedelta(days=1)).strftime("%Y-%m-%dT10:00"), "duration": 60, "notes": ""}
+    elif data.template_id == "log_service":
+        prefill = {"client_id": "", "service_date": now.strftime("%Y-%m-%d"), "service_type": "", "provider_name": user.get("name", ""), "notes": ""}
+    elif data.template_id == "add_outcome":
+        prefill = {"client_id": "", "goal_description": "", "target_date": (now + timedelta(days=90)).strftime("%Y-%m-%d"), "status": "NOT_STARTED"}
+    if data.context and hf_client:
+        try:
+            prompt = f"<s>[INST] Given context: '{data.context}', suggest values for: {', '.join(prefill.keys())}. Return as key:value pairs. [/INST]"
+            result = await hf_generate(prompt, 200)
+            if result:
+                for line in result.strip().split("\n"):
+                    if ":" in line:
+                        k, v = line.split(":", 1)
+                        k = k.strip().lower().replace(" ", "_")
+                        if k in prefill:
+                            prefill[k] = v.strip()
+        except Exception:
+            pass
+    return {"template": template, "prefill": prefill}
 
 # ── Health Check ──
 @api_router.get("/health")
@@ -1278,7 +1409,7 @@ async def startup():
     # Write test credentials
     os.makedirs("/app/memory", exist_ok=True)
     with open("/app/memory/test_credentials.md", "w") as f:
-        f.write(f"# Test Credentials\n\n## Admin\n- Email: {admin_email}\n- Password: {admin_password}\n- Role: ADMIN\n\n## Auth Endpoints\n- POST /api/auth/login\n- POST /api/auth/register\n- GET /api/auth/me\n- POST /api/auth/logout\n")
+        f.write(f"# Test Credentials\n\n## Admin\n- Email: {admin_email}\n- Password: {admin_password}\n- Role: ADMIN\n\n## Demo Case Worker\n- Email: caseworker@demo.caseflow.io\n- Password: demo1234\n- Role: CASE_WORKER\n- Name: Sarah Thompson\n\n## Demo Volunteer\n- Email: volunteer@demo.caseflow.io\n- Password: demo1234\n- Role: VOLUNTEER\n- Name: Alex Rivera\n\n## Auth Endpoints\n- POST /api/auth/login\n- POST /api/auth/register\n- GET /api/auth/me\n- POST /api/auth/logout\n")
 
 @app.on_event("shutdown")
 async def shutdown():

@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, ChevronLeft, ChevronRight, UserCheck, Clock, Upload, Download } from "lucide-react";
+import { Search, Plus, ChevronLeft, ChevronRight, UserCheck, Clock, Upload, Download, Users } from "lucide-react";
 import { toast } from "sonner";
 import { formatApiError } from "@/lib/api";
 
@@ -33,11 +33,8 @@ export default function Clients() {
       const { data } = await api.get("/clients", { params: { search, page, page_size: 25 } });
       setClients(data.data || []);
       setPagination(data.pagination || { page: 1, total_pages: 1, total_count: 0 });
-    } catch (err) {
-      console.error("Fetch clients error:", err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   }, [search, page]);
 
   useEffect(() => { fetchClients(); }, [fetchClients]);
@@ -51,11 +48,8 @@ export default function Clients() {
       setShowCreate(false);
       setNewClient({ name: "", email: "", phone: "", address: "", notes: "" });
       navigate(`/clients/${data.id}`);
-    } catch (err) {
-      toast.error(formatApiError(err.response?.data?.detail));
-    } finally {
-      setCreating(false);
-    }
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    finally { setCreating(false); }
   };
 
   const handleCsvImport = async (e) => {
@@ -65,34 +59,20 @@ export default function Clients() {
     setImporting(true);
     setImportResult(null);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const { data } = await api.post("/clients/import", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
+      const formData = new FormData(); formData.append("file", file);
+      const { data } = await api.post("/clients/import", formData, { headers: { "Content-Type": "multipart/form-data" } });
       setImportResult(data);
-      if (data.imported > 0) {
-        toast.success(`Imported ${data.imported} clients`);
-        fetchClients();
-      } else {
-        toast.error("No clients imported");
-      }
-    } catch (err) {
-      toast.error(formatApiError(err.response?.data?.detail));
-    } finally {
-      setImporting(false);
-      e.target.value = "";
-    }
+      if (data.imported > 0) { toast.success(`Imported ${data.imported} clients`); fetchClients(); }
+      else { toast.error("No clients imported"); }
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    finally { setImporting(false); e.target.value = ""; }
   };
 
   const handleExport = async () => {
     try {
       const res = await api.get("/reports/export", { responseType: "blob" });
       const url = window.URL.createObjectURL(new Blob([res.data]));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "clients_export.csv";
-      a.click();
+      const a = document.createElement("a"); a.href = url; a.download = "clients_export.csv"; a.click();
     } catch (err) { toast.error("Export failed"); }
   };
 
@@ -100,11 +80,10 @@ export default function Clients() {
 
   return (
     <div className="space-y-6" data-testid="clients-page">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-medium font-['Outfit'] tracking-tight text-[#F9F9FB]">Clients</h1>
-          <p className="text-sm text-[#6E6E73] mt-1">{pagination.total_count} total clients</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">Clients</h1>
+          <p className="text-sm text-[#9CA3AF] mt-1">{pagination.total_count} total clients</p>
         </div>
         {(role === "ADMIN" || role === "CASE_WORKER") && (
           <div className="flex items-center gap-2">
@@ -112,93 +91,80 @@ export default function Clients() {
               <>
                 <label className="cursor-pointer">
                   <input type="file" accept=".csv" className="hidden" onChange={handleCsvImport} disabled={importing} data-testid="csv-import-input" />
-                  <div className="flex items-center gap-2 px-3 py-2 border border-[#2A2A2D] rounded-sm text-sm text-[#A0A0A5] hover:bg-white/5 transition-colors h-9" data-testid="csv-import-btn">
-                    {importing ? <div className="w-3.5 h-3.5 border-2 border-[#A0A0A5]/30 border-t-[#A0A0A5] rounded-full animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  <div className="flex items-center gap-2 px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm text-[#6B7280] hover:bg-[#FFF7ED] transition-colors h-9" data-testid="csv-import-btn">
+                    {importing ? <div className="w-3.5 h-3.5 border-2 border-[#6B7280]/30 border-t-[#6B7280] rounded-full animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                     <span className="hidden sm:inline">{importing ? "Importing..." : "Import CSV"}</span>
                   </div>
                 </label>
-                <Button variant="outline" size="sm" onClick={handleExport} className="border-[#2A2A2D] text-[#A0A0A5] hover:bg-white/5 gap-2 h-9 rounded-sm" data-testid="csv-export-btn">
-                  <Download className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Export</span>
+                <Button variant="outline" size="sm" onClick={handleExport} className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#FFF7ED] gap-2 h-9 rounded-lg" data-testid="csv-export-btn">
+                  <Download className="h-3.5 w-3.5" /><span className="hidden sm:inline">Export</span>
                 </Button>
               </>
             )}
-            <Button onClick={() => setShowCreate(true)} className="bg-[#0055FF] hover:bg-[#0044CC] gap-2 rounded-sm" data-testid="add-client-btn">
+            <Button onClick={() => setShowCreate(true)} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] hover:from-[#EA580C] hover:to-[#F97316] text-white gap-2 rounded-lg font-bold shadow-md shadow-orange-200" data-testid="add-client-btn">
               <Plus className="h-4 w-4" /> Add Client
             </Button>
           </div>
         )}
       </div>
 
-      {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6E6E73]" />
-        <Input
-          placeholder="Search clients..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="pl-10 bg-[#141415] border-[#2A2A2D] text-[#F9F9FB] placeholder:text-[#6E6E73] h-10"
-          data-testid="client-search-input"
-        />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D1D5DB]" />
+        <Input placeholder="Search clients..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          className="pl-10 bg-white border-[#E5E7EB] text-[#1F2937] placeholder:text-[#D1D5DB] h-10 rounded-lg" data-testid="client-search-input" />
       </div>
 
-      {/* Import Result Banner */}
       {importResult && (
-        <div className="p-3 bg-[#141415] border border-[#2A2A2D] rounded-sm flex items-center justify-between" data-testid="import-result-banner">
-          <span className="text-sm text-[#A0A0A5]">
-            Import complete: <span className="text-[#00E676] font-mono">{importResult.imported}</span> imported, <span className="text-[#FFEA00] font-mono">{importResult.skipped}</span> skipped
+        <div className="p-3 bg-white border border-[#E5E7EB] rounded-xl flex items-center justify-between" data-testid="import-result-banner">
+          <span className="text-sm text-[#6B7280]">
+            Import complete: <span className="text-[#10B981] font-mono font-bold">{importResult.imported}</span> imported, <span className="text-[#F59E0B] font-mono font-bold">{importResult.skipped}</span> skipped
           </span>
-          <Button variant="ghost" size="sm" onClick={() => setImportResult(null)} className="text-[#6E6E73] h-7">Dismiss</Button>
+          <Button variant="ghost" size="sm" onClick={() => setImportResult(null)} className="text-[#9CA3AF] h-7">Dismiss</Button>
         </div>
       )}
 
-      {/* Client Table */}
       {loading ? (
-        <div className="space-y-2">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-14 bg-[#141415]" />)}</div>
+        <div className="space-y-2">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
       ) : clients.length === 0 ? (
-        <div className="bg-[#141415] border border-[#2A2A2D] rounded-sm p-12 text-center" data-testid="clients-empty">
-          <Users className="h-12 w-12 text-[#2A2A2D] mx-auto mb-4" />
-          <p className="text-[#A0A0A5] mb-4">No clients found</p>
+        <div className="bg-white border border-[#E8E8E8] rounded-xl p-12 text-center" data-testid="clients-empty">
+          <Users className="h-12 w-12 text-[#E5E7EB] mx-auto mb-4" />
+          <p className="text-[#6B7280] mb-4">No clients found</p>
           {(role === "ADMIN" || role === "CASE_WORKER") && (
-            <Button onClick={() => setShowCreate(true)} variant="outline" className="border-[#2A2A2D] text-[#A0A0A5] hover:bg-white/5">Add your first client</Button>
+            <Button onClick={() => setShowCreate(true)} variant="outline" className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#FFF7ED] rounded-lg">Add your first client</Button>
           )}
         </div>
       ) : (
-        <div className="bg-[#141415] border border-[#2A2A2D] rounded-sm overflow-hidden">
+        <div className="bg-white border border-[#E8E8E8] rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[#2A2A2D]">
-                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#6E6E73]">Name</th>
-                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#6E6E73] hidden sm:table-cell">Email</th>
-                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#6E6E73] hidden md:table-cell">Phone</th>
-                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#6E6E73]">Status</th>
+              <tr className="border-b border-[#F3F4F6]">
+                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">Name</th>
+                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF] hidden sm:table-cell">Email</th>
+                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF] hidden md:table-cell">Phone</th>
+                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">Status</th>
               </tr>
             </thead>
             <tbody>
               {clients.map((c, i) => (
-                <tr
-                  key={c.id}
-                  className={`table-row-hover border-b border-[#2A2A2D]/50 cursor-pointer animate-fade-in stagger-${Math.min(i+1, 4)}`}
-                  onClick={() => navigate(`/clients/${c.id}`)}
-                  data-testid={`client-row-${c.id}`}
-                >
+                <tr key={c.id} className={`table-row-hover border-b border-[#F9FAFB] cursor-pointer animate-fade-in stagger-${Math.min(i+1, 4)}`}
+                  onClick={() => navigate(`/clients/${c.id}`)} data-testid={`client-row-${c.id}`}>
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-sm bg-[#0A0A0B] border border-[#2A2A2D] flex items-center justify-center text-xs font-medium text-[#0055FF]">
+                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#FFF7ED] to-[#FED7AA] flex items-center justify-center text-xs font-bold text-[#F97316]">
                         {c.name?.charAt(0)?.toUpperCase()}
                       </div>
-                      <span className="text-sm font-medium text-[#F9F9FB]">{c.name}</span>
+                      <span className="text-sm font-semibold text-[#1F2937]">{c.name}</span>
                     </div>
                   </td>
-                  <td className="p-4 text-sm text-[#A0A0A5] hidden sm:table-cell">{c.email || "—"}</td>
-                  <td className="p-4 text-sm text-[#A0A0A5] hidden md:table-cell font-mono">{c.phone || "—"}</td>
+                  <td className="p-4 text-sm text-[#6B7280] hidden sm:table-cell">{c.email || "\u2014"}</td>
+                  <td className="p-4 text-sm text-[#6B7280] hidden md:table-cell font-mono">{c.phone || "\u2014"}</td>
                   <td className="p-4">
                     {c.pending ? (
-                      <Badge variant="outline" className="border-[#FFEA00]/30 text-[#FFEA00] bg-[#FFEA00]/10 gap-1 text-xs">
+                      <Badge variant="outline" className="border-[#F59E0B]/30 text-[#F59E0B] bg-[#FFFBEB] gap-1 text-xs rounded-full">
                         <Clock className="h-3 w-3" /> Pending
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="border-[#00E676]/30 text-[#00E676] bg-[#00E676]/10 gap-1 text-xs">
+                      <Badge variant="outline" className="border-[#10B981]/30 text-[#10B981] bg-[#ECFDF5] gap-1 text-xs rounded-full">
                         <UserCheck className="h-3 w-3" /> Active
                       </Badge>
                     )}
@@ -210,56 +176,48 @@ export default function Clients() {
         </div>
       )}
 
-      {/* Pagination */}
       {pagination.total_pages > 1 && (
         <div className="flex items-center justify-center gap-4">
-          <Button variant="ghost" size="icon" disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="text-[#A0A0A5]">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-sm text-[#A0A0A5] font-mono">{page} / {pagination.total_pages}</span>
-          <Button variant="ghost" size="icon" disabled={page >= pagination.total_pages} onClick={() => setPage(p => p + 1)} className="text-[#A0A0A5]">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <Button variant="ghost" size="icon" disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="text-[#6B7280] rounded-lg"><ChevronLeft className="h-4 w-4" /></Button>
+          <span className="text-sm text-[#6B7280] font-mono">{page} / {pagination.total_pages}</span>
+          <Button variant="ghost" size="icon" disabled={page >= pagination.total_pages} onClick={() => setPage(p => p + 1)} className="text-[#6B7280] rounded-lg"><ChevronRight className="h-4 w-4" /></Button>
         </div>
       )}
 
-      {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="bg-[#141415] border-[#2A2A2D] text-[#F9F9FB] max-w-lg" data-testid="create-client-dialog">
-          <DialogHeader>
-            <DialogTitle className="font-['Outfit'] text-xl">New Client</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] max-w-lg rounded-2xl" data-testid="create-client-dialog">
+          <DialogHeader><DialogTitle className="font-['Nunito'] text-xl font-bold">New Client</DialogTitle></DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-[#A0A0A5] text-xs uppercase tracking-wider">Full Name *</Label>
+              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Full Name *</Label>
               <Input value={newClient.name} onChange={(e) => setNewClient({ ...newClient, name: e.target.value })} required placeholder="Client name"
-                className="bg-[#0A0A0B] border-[#2A2A2D] text-[#F9F9FB]" data-testid="new-client-name" />
+                className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="new-client-name" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[#A0A0A5] text-xs uppercase tracking-wider">Email</Label>
+                <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Email</Label>
                 <Input type="email" value={newClient.email} onChange={(e) => setNewClient({ ...newClient, email: e.target.value })} placeholder="email@example.com"
-                  className="bg-[#0A0A0B] border-[#2A2A2D] text-[#F9F9FB]" data-testid="new-client-email" />
+                  className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="new-client-email" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[#A0A0A5] text-xs uppercase tracking-wider">Phone</Label>
+                <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Phone</Label>
                 <Input value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })} placeholder="+1 (555) 000-0000"
-                  className="bg-[#0A0A0B] border-[#2A2A2D] text-[#F9F9FB]" data-testid="new-client-phone" />
+                  className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="new-client-phone" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-[#A0A0A5] text-xs uppercase tracking-wider">Address</Label>
+              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Address</Label>
               <Input value={newClient.address} onChange={(e) => setNewClient({ ...newClient, address: e.target.value })} placeholder="Street address"
-                className="bg-[#0A0A0B] border-[#2A2A2D] text-[#F9F9FB]" data-testid="new-client-address" />
+                className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="new-client-address" />
             </div>
             <div className="space-y-2">
-              <Label className="text-[#A0A0A5] text-xs uppercase tracking-wider">Notes</Label>
+              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Notes</Label>
               <Textarea value={newClient.notes} onChange={(e) => setNewClient({ ...newClient, notes: e.target.value })} placeholder="Initial notes..."
-                className="bg-[#0A0A0B] border-[#2A2A2D] text-[#F9F9FB] min-h-[80px]" data-testid="new-client-notes" />
+                className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] min-h-[80px] rounded-lg" data-testid="new-client-notes" />
             </div>
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setShowCreate(false)} className="text-[#A0A0A5]">Cancel</Button>
-              <Button type="submit" disabled={creating} className="bg-[#0055FF] hover:bg-[#0044CC] gap-2" data-testid="create-client-submit">
+              <Button type="button" variant="ghost" onClick={() => setShowCreate(false)} className="text-[#9CA3AF] rounded-lg">Cancel</Button>
+              <Button type="submit" disabled={creating} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold gap-2" data-testid="create-client-submit">
                 {creating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "Create Client"}
               </Button>
             </DialogFooter>
@@ -269,10 +227,3 @@ export default function Clients() {
     </div>
   );
 }
-
-// Need Users icon
-const Users = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);

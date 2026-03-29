@@ -138,13 +138,24 @@ class CaseFlowAPITester:
         return self.run_test("Admin Users", "GET", "admin/users", 200)
 
     def test_demo_seed(self):
-        """Test demo data seeding"""
-        return self.run_test(
+        """Test demo data seeding - should create demo users with credentials"""
+        success, response = self.run_test(
             "Demo Data Seed",
             "POST",
             "demo/seed",
             200
         )
+        if success:
+            if 'demo_users' in response:
+                demo_users = response['demo_users']
+                print(f"   ✅ Demo users created: {len(demo_users)}")
+                for user in demo_users:
+                    print(f"      - {user.get('name', 'Unknown')} ({user.get('role', 'Unknown')}): {user.get('email', 'No email')}")
+                return True, response
+            else:
+                print(f"   ⚠️  Demo seed successful but no demo_users in response")
+                return True, response
+        return success, response
 
     def test_shareable_invite(self):
         """Test shareable invite creation"""
@@ -160,6 +171,50 @@ class CaseFlowAPITester:
             200,
             data=invite_data
         )
+
+    def test_ai_templates(self):
+        """Test AI templates endpoint - should return 4 templates"""
+        success, response = self.run_test("AI Templates", "GET", "ai/templates", 200)
+        if success:
+            templates = response if isinstance(response, list) else []
+            expected_count = 4
+            if len(templates) == expected_count:
+                print(f"   ✅ Found {len(templates)} templates as expected")
+                # Check for expected template IDs
+                template_ids = [t.get('id') for t in templates]
+                expected_ids = ['create_client', 'schedule_visit', 'log_service', 'add_outcome']
+                missing_ids = [tid for tid in expected_ids if tid not in template_ids]
+                if missing_ids:
+                    print(f"   ⚠️  Missing template IDs: {missing_ids}")
+                else:
+                    print(f"   ✅ All expected template IDs found")
+                return True, response
+            else:
+                print(f"   ❌ Expected {expected_count} templates, got {len(templates)}")
+                return False, response
+        return success, response
+
+    def test_ai_generate_form(self):
+        """Test AI generate form endpoint"""
+        form_data = {
+            "template_id": "create_client",
+            "context": "New client from community center referral"
+        }
+        success, response = self.run_test(
+            "AI Generate Form",
+            "POST",
+            "ai/generate-form",
+            200,
+            data=form_data
+        )
+        if success:
+            if 'template' in response and 'prefill' in response:
+                print(f"   ✅ Response contains template and prefill data")
+                return True, response
+            else:
+                print(f"   ❌ Missing template or prefill in response")
+                return False, response
+        return success, response
 
     def test_csv_import(self, client_id=None):
         """Test CSV import functionality"""
@@ -248,8 +303,13 @@ def main():
     tester.test_admin_vocabulary()
     tester.test_admin_users()
     
-    # Test new features
-    print(f"\n🆕 Testing New Features...")
+    # Test AI Templates (new feature)
+    print(f"\n🤖 Testing AI Features...")
+    tester.test_ai_templates()
+    tester.test_ai_generate_form()
+    
+    # Test other new features
+    print(f"\n🆕 Testing Other New Features...")
     tester.test_demo_seed()
     tester.test_shareable_invite()
     tester.test_csv_import()
