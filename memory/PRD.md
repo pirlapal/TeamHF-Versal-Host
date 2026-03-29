@@ -7,57 +7,59 @@ Build a futuristic web application with all SaaS features for nonprofit case man
 - **Frontend**: React 19 + Tailwind CSS + Shadcn UI
 - **Backend**: FastAPI (Python) + MongoDB — 14 modular route modules
 - **Auth**: JWT (bcrypt + PyJWT) with Advanced RBAC (35 granular permissions)
-- **AI**: Hugging Face Inference API (Mistral-7B) with fallback
+- **AI**: GPT-4o-mini via Emergent LLM Key (emergentintegrations library)
 - **Payments**: Stripe Checkout (payment requests)
 - **Email**: SendGrid (graceful fallback)
 - **Storage**: Cloud object storage for attachments
 - **CI/CD**: GitHub Actions + Docker + docker-compose
-- **Testing**: 23 property-based tests (fast-check) + pytest backend tests
+- **Testing**: 23 property-based tests (fast-check) + pytest backend
 
 ## All Implemented Features (Complete)
 
 ### Core
 - Multi-tenant isolation, JWT auth, RBAC (Admin/CaseWorker/Volunteer)
-- Client CRUD, intake wizard, demographics, duplicate detection (R4.5)
-- Service logging with 72-hour edit window (R5.4)
-- Visit scheduling with conflict detection (R6.3)
+- Client CRUD, intake wizard, demographics, duplicate detection
+- Service logging with 72-hour edit window
+- Visit scheduling with conflict detection
 - Outcome tracking with goal-based progress
-- Dashboard: stats, trends, demographics breakdown (R27.1), CSV export (R27.7)
+- Dashboard: stats, trends, demographics breakdown, CSV export
 
-### Advanced
-- AI Copilot with chat + action templates
-- AI Narrative Reports: select specific clients or all (R35.4)
-- PDF reports (client + org), CSV exports (all entities)
-- Payment requests with Stripe Checkout
-- SendGrid email notifications (6 triggers)
-- In-app notifications + team messaging
-- File attachments (cloud storage)
-- CSV import/export with preview
-- Demo mode (seed/clear) with AlertDialog confirmation
-- Advanced client filtering by status/date range (R9.3)
-- Custom Field Sets CRUD
-- Custom permission sets per role (35 permissions)
+### AI (GPT-4o-mini Powered)
+- AI Copilot: Chat with real LLM, auto-detects client context from URL
+- Summarize Client: Data-specific professional summaries
+- Suggest Tags: Auto-tags based on service history
+- Next Actions: Actionable follow-up recommendations
+- Missing Fields: Identifies incomplete client records
+- AI Narrative Reports: Select specific clients or all, generates professional narratives
+- Action Templates: Create Client, Schedule Visit, Log Service, Add Outcome (with AI pre-fill)
+- Markdown rendering in chat (bold, lists, line breaks)
+- Intelligent data-driven fallbacks when LLM unavailable
+
+### Reporting
+- PDF reports (client + organization)
+- CSV exports (all entities + dashboard)
+- AI narrative report generation (per-client or all)
+- Dashboard CSV export (Admin only)
 
 ### Infrastructure
-- CI/CD: GitHub Actions pipeline (test → build → push → deploy)
-- Docker: Multi-stage Dockerfile (backend + frontend)
-- docker-compose: Full stack orchestration (MongoDB + backend + frontend + nginx)
-- 23 frontend property tests with fast-check
+- CI/CD: GitHub Actions (test → build → push → deploy)
+- Docker: Multi-stage Dockerfile + docker-compose
+- 23 frontend property tests (fast-check)
 - README with full documentation
+- HackForge branding throughout
 
 ## Credentials
 - Admin: admin@caseflow.io / admin123
 - Case Worker: caseworker@demo.caseflow.io / demo1234
 - Volunteer: volunteer@demo.caseflow.io / demo1234
 
-## Test Results
-- Iteration 7-10: All 100% pass rate
+## Test Results (All 100%)
+- Iterations 7-11: All passing
 - 23 frontend property tests: All passing
-- Backend pytest: All passing
 
 ## P2/Backlog
 - Twilio SMS Integration
-- Enhanced AI (real LLM summarization, semantic search)
+- Enhanced AI (persistent chat sessions, semantic search)
 - Audit trail / activity logging
 - i18n / localization
-- WCAG 2.2 AA accessibility compliance
+- WCAG 2.2 AA accessibility
