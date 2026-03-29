@@ -24,7 +24,7 @@ export default function InviteAccept() {
       try {
         const { data } = await api.get(`/invitations/validate/${token}`);
         setInvite({ ...data, organization: "HackForge" });
-        setForm({ ...form, name: data.name }); // Pre-fill name from invitation
+        setForm(f => ({ ...f, name: data.name })); // Pre-fill name from invitation
       }
       catch (err) { setError(formatApiError(err.response?.data?.detail) || "Invalid or expired invite link"); }
       finally { setLoading(false); }
