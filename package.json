@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "install": "cd frontend && yarn install",
+    "install": "cd frontend && yarn install --silent",
     "build": "cd frontend && CI=true yarn build",
     "start": "cd frontend && yarn start"
   }
