@@ -273,4 +273,3 @@ async def require_permission(request: Request, permission: str):
     if permission not in perms:
         raise HTTPException(status_code=403, detail=f"Missing permission: {permission}")
     return user
-    await db.notifications.insert_one(doc)

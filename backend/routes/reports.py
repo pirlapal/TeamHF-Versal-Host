@@ -22,6 +22,42 @@ async def export_csv(request: Request):
             writer.writerow({k: c.get(k, "") for k in ["name", "email", "phone", "address", "pending", "created_at"]})
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=clients_export.csv"})
 
+# ── Dashboard CSV Export (R27.7) ──
+@router.get("/reports/dashboard-csv")
+async def export_dashboard_csv(request: Request):
+    user = await require_role(request, ["ADMIN"])
+    tid = user.get("tenant_id")
+    from collections import defaultdict
+    total_clients = await db.clients.count_documents({"tenant_id": tid, "is_archived": {"$ne": True}})
+    total_services = await db.service_logs.count_documents({"tenant_id": tid})
+    total_visits = await db.visits.count_documents({"tenant_id": tid})
+    total_outcomes = await db.outcomes.count_documents({"tenant_id": tid})
+    start = datetime.now(timezone.utc) - __import__("datetime").timedelta(days=30)
+    start_str = start.strftime("%Y-%m-%d")
+    services = await db.service_logs.find({"tenant_id": tid, "service_date": {"$gte": start_str}}, {"_id": 0, "service_date": 1}).to_list(5000)
+    visits = await db.visits.find({"tenant_id": tid, "date": {"$gte": start_str}}, {"_id": 0, "date": 1}).to_list(5000)
+    day_data = defaultdict(lambda: {"services": 0, "visits": 0})
+    for s in services:
+        day = (s.get("service_date") or "")[:10]
+        if day:
+            day_data[day]["services"] += 1
+    for v in visits:
+        day = (v.get("date") or "")[:10]
+        if day:
+            day_data[day]["visits"] += 1
+    output = io.StringIO()
+    output.write("DASHBOARD SUMMARY\n")
+    output.write(f"Total Clients,{total_clients}\n")
+    output.write(f"Total Services,{total_services}\n")
+    output.write(f"Total Visits,{total_visits}\n")
+    output.write(f"Total Outcomes,{total_outcomes}\n\n")
+    output.write("DAILY ACTIVITY TRENDS (Last 30 Days)\n")
+    writer = csv.DictWriter(output, fieldnames=["date", "services", "visits"])
+    writer.writeheader()
+    for day in sorted(day_data.keys()):
+        writer.writerow({"date": day, "services": day_data[day]["services"], "visits": day_data[day]["visits"]})
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=dashboard_export.csv"})
+
 @router.get("/reports/export/{report_type}")
 async def export_typed_csv(report_type: str, request: Request):
     user = await require_role(request, ["ADMIN"])
@@ -64,6 +100,85 @@ async def export_typed_csv(report_type: str, request: Request):
         raise HTTPException(status_code=400, detail="Invalid report type. Use: services, visits, outcomes, payments")
 
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+# ── AI Narrative Report (R35.4) ──
+@router.post("/reports/narrative")
+async def generate_narrative_report(request: Request):
+    user = await require_role(request, ["ADMIN"])
+    tid = user.get("tenant_id")
+    body = await request.json()
+    client_ids = body.get("client_ids", [])  # Empty = all clients
+    # Fetch clients
+    if client_ids:
+        query = {"tenant_id": tid, "is_archived": {"$ne": True}, "_id": {"$in": [ObjectId(c) for c in client_ids]}}
+    else:
+        query = {"tenant_id": tid, "is_archived": {"$ne": True}}
+    clients = await db.clients.find(query).to_list(200)
+    if not clients:
+        raise HTTPException(status_code=404, detail="No clients found")
+    # Build context per client
+    narratives = []
+    for c in clients:
+        cid = str(c["_id"])
+        cname = c.get("name", "Unknown")
+        services = await db.service_logs.find({"client_id": cid, "tenant_id": tid}).sort("service_date", -1).to_list(20)
+        outcomes = await db.outcomes.find({"client_id": cid, "tenant_id": tid}).to_list(20)
+        visits = await db.visits.find({"client_id": cid, "tenant_id": tid}).sort("date", -1).to_list(20)
+        svc_summary = f"{len(services)} service(s)" if services else "No services recorded"
+        if services:
+            types = set(s.get("service_type", "") for s in services if s.get("service_type"))
+            svc_summary += f" across {', '.join(list(types)[:5])}"
+            latest = services[0].get("service_date", "N/A")
+            svc_summary += f". Most recent: {latest}"
+        out_summary = f"{len(outcomes)} outcome goal(s)" if outcomes else "No outcome goals set"
+        if outcomes:
+            achieved = sum(1 for o in outcomes if o.get("status") == "ACHIEVED")
+            in_prog = sum(1 for o in outcomes if o.get("status") == "IN_PROGRESS")
+            out_summary += f" ({achieved} achieved, {in_prog} in progress)"
+        visit_summary = f"{len(visits)} visit(s)" if visits else "No visits scheduled"
+        if visits:
+            completed = sum(1 for v in visits if v.get("status") == "COMPLETED")
+            visit_summary += f" ({completed} completed)"
+        # Try AI generation
+        narrative_text = None
+        try:
+            from helpers import hf_client, hf_generate
+            if hf_client:
+                ctx = f"Client: {cname}\nServices: {svc_summary}\nOutcomes: {out_summary}\nVisits: {visit_summary}"
+                if c.get("notes"):
+                    ctx += f"\nNotes: {c['notes']}"
+                prompt = f"<s>[INST] Write a professional 3-4 sentence case narrative summary for a nonprofit case management report about this client:\n{ctx}\n[/INST]"
+                result = await hf_generate(prompt, 300)
+                if result and len(result.strip()) > 20:
+                    narrative_text = result.strip()
+        except Exception as e:
+            logger.warning(f"AI narrative generation failed for {cname}: {e}")
+        if not narrative_text:
+            # Fallback narrative
+            status_text = "active" if not c.get("pending") else "pending approval"
+            narrative_text = (
+                f"{cname} is currently an {status_text} client in the program. "
+                f"They have {svc_summary}. "
+                f"Regarding outcomes, there are {out_summary}. "
+                f"In terms of engagement, the client has {visit_summary}. "
+            )
+            if c.get("notes"):
+                narrative_text += f"Additional notes: {c['notes']}"
+        narratives.append({
+            "client_id": cid,
+            "client_name": cname,
+            "narrative": narrative_text,
+            "stats": {
+                "services": len(services),
+                "outcomes": len(outcomes),
+                "visits": len(visits),
+            },
+        })
+    return {
+        "narratives": narratives,
+        "total_clients": len(narratives),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 @router.get("/reports/client/{client_id}/pdf")
 async def client_pdf_report(client_id: str, request: Request):

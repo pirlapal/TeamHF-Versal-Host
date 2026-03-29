@@ -4,9 +4,10 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   FileText, Download, BarChart3, Users, Briefcase,
-  CalendarDays, Target, DollarSign, FileDown
+  CalendarDays, Target, DollarSign, FileDown, Sparkles, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,6 +24,10 @@ export default function Reports() {
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState("");
   const [downloading, setDownloading] = useState(null);
+  const [selectedNarrativeClients, setSelectedNarrativeClients] = useState([]);
+  const [narrativeAll, setNarrativeAll] = useState(true);
+  const [narrativeResult, setNarrativeResult] = useState(null);
+  const [generatingNarrative, setGeneratingNarrative] = useState(false);
 
   useEffect(() => {
     const fetch = async () => {
@@ -71,6 +76,25 @@ export default function Reports() {
       toast.error("PDF generation failed");
     } finally { setDownloading(null); }
   }, []);
+
+  const handleNarrativeReport = useCallback(async () => {
+    setGeneratingNarrative(true);
+    setNarrativeResult(null);
+    try {
+      const payload = narrativeAll ? { client_ids: [] } : { client_ids: selectedNarrativeClients };
+      const { data } = await api.post("/reports/narrative", payload);
+      setNarrativeResult(data);
+      toast.success(`Generated narratives for ${data.total_clients} client(s)`);
+    } catch (err) {
+      toast.error("Narrative report generation failed");
+    } finally { setGeneratingNarrative(false); }
+  }, [narrativeAll, selectedNarrativeClients]);
+
+  const toggleNarrativeClient = (clientId) => {
+    setSelectedNarrativeClients(prev =>
+      prev.includes(clientId) ? prev.filter(c => c !== clientId) : [...prev, clientId]
+    );
+  };
 
   const OUTCOME_COLORS = { "ACHIEVED": "#10B981", "IN_PROGRESS": "#F59E0B", "NOT_STARTED": "#9CA3AF", "NOT_ACHIEVED": "#EF4444" };
   const totalOutcomes = outcomeStats.reduce((s, o) => s + o.count, 0);
@@ -156,6 +180,76 @@ export default function Reports() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* AI Narrative Reports (R35.4) */}
+      {user?.role === "ADMIN" && (
+        <div className="bg-white border border-[#E8E8E8] rounded-xl p-6 space-y-4" data-testid="narrative-report-section">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#EDE9FE] flex items-center justify-center">
+              <Sparkles className="h-5 w-5 text-[#8B5CF6]" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937]">AI Narrative Reports</h3>
+              <p className="text-xs text-[#9CA3AF]">Generate AI-powered case narrative summaries for selected or all clients</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Checkbox id="all-clients" checked={narrativeAll} onCheckedChange={(v) => { setNarrativeAll(!!v); if (v) setSelectedNarrativeClients([]); }} data-testid="narrative-all-toggle" />
+                <label htmlFor="all-clients" className="text-sm font-semibold text-[#1F2937] cursor-pointer">All Clients</label>
+              </div>
+              <span className="text-xs text-[#9CA3AF]">or select specific clients below</span>
+            </div>
+
+            {!narrativeAll && (
+              <div className="border border-[#E5E7EB] rounded-lg p-3 max-h-48 overflow-y-auto space-y-1" data-testid="narrative-client-list">
+                {clients.length === 0 && <p className="text-xs text-[#9CA3AF]">No clients found</p>}
+                {clients.map((c) => (
+                  <div key={c.id} className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-[#FAFAF8] transition-colors">
+                    <Checkbox id={`nc-${c.id}`} checked={selectedNarrativeClients.includes(c.id)}
+                      onCheckedChange={() => toggleNarrativeClient(c.id)} data-testid={`narrative-client-${c.id}`} />
+                    <label htmlFor={`nc-${c.id}`} className="text-sm text-[#4B5563] cursor-pointer flex-1">{c.name}</label>
+                  </div>
+                ))}
+                {selectedNarrativeClients.length > 0 && (
+                  <p className="text-xs font-semibold text-[#8B5CF6] pt-1">{selectedNarrativeClients.length} client(s) selected</p>
+                )}
+              </div>
+            )}
+
+            <Button onClick={handleNarrativeReport} disabled={generatingNarrative || (!narrativeAll && selectedNarrativeClients.length === 0)}
+              className="bg-gradient-to-r from-[#8B5CF6] to-[#A78BFA] hover:from-[#7C3AED] hover:to-[#8B5CF6] text-white gap-2 rounded-lg font-bold shadow-md shadow-purple-200"
+              data-testid="generate-narrative-btn">
+              {generatingNarrative ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <><Sparkles className="h-4 w-4" /> Generate Narrative Report</>}
+            </Button>
+          </div>
+
+          {/* Narrative Results */}
+          {narrativeResult && (
+            <div className="space-y-3 mt-4" data-testid="narrative-results">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-[#1F2937]">{narrativeResult.total_clients} Narrative(s) Generated</p>
+                <span className="text-[10px] text-[#9CA3AF]">{new Date(narrativeResult.generated_at).toLocaleString()}</span>
+              </div>
+              {narrativeResult.narratives.map((n) => (
+                <div key={n.client_id} className="border border-[#E5E7EB] rounded-xl p-4 bg-[#FAFAF8]" data-testid={`narrative-${n.client_id}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-bold text-[#1F2937]">{n.client_name}</h4>
+                    <div className="flex gap-2 text-[10px] text-[#9CA3AF]">
+                      <span>{n.stats.services} svc</span>
+                      <span>{n.stats.outcomes} goals</span>
+                      <span>{n.stats.visits} visits</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-[#4B5563] leading-relaxed">{n.narrative}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

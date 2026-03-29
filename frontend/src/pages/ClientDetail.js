@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Edit, Archive, Plus, CheckCircle, Clock, XCircle, Target, Paperclip, Upload, Trash2, FileText } from "lucide-react";
+import { ArrowLeft, Edit, Archive, Plus, CheckCircle, Clock, XCircle, Target, Paperclip, Upload, Trash2, FileText, Lock } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_COLORS = {
@@ -119,7 +119,22 @@ export default function ClientDetail() {
           {services.length === 0 ? <div className="text-center py-12 text-[#9CA3AF] text-sm">No services recorded yet</div> : (
             <div className="space-y-2">{services.map((s) => (
               <div key={s.id} className="bg-white border border-[#E8E8E8] rounded-xl p-4 table-row-hover" data-testid={`service-${s.id}`}>
-                <div className="flex items-center justify-between mb-2"><span className="text-sm font-semibold text-[#1F2937]">{s.service_type}</span><span className="text-xs text-[#9CA3AF] font-mono">{s.service_date}</span></div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-[#1F2937]">{s.service_type}</span>
+                  <div className="flex items-center gap-2">
+                    {s.editable === false && (
+                      <Badge variant="outline" className="border-[#FDE68A] text-[#F59E0B] bg-[#FFFBEB] text-[9px] rounded-full" data-testid={`service-locked-${s.id}`}>
+                        <Lock className="h-2.5 w-2.5 mr-1" /> 72h window closed
+                      </Badge>
+                    )}
+                    {s.editable && (role === "ADMIN" || role === "CASE_WORKER") && (
+                      <Badge variant="outline" className="border-[#D1FAE5] text-[#10B981] bg-[#ECFDF5] text-[9px] rounded-full" data-testid={`service-editable-${s.id}`}>
+                        Editable
+                      </Badge>
+                    )}
+                    <span className="text-xs text-[#9CA3AF] font-mono">{s.service_date}</span>
+                  </div>
+                </div>
                 <p className="text-xs text-[#6B7280]">Provider: {s.provider_name}</p>
                 {s.notes && <p className="text-xs text-[#9CA3AF] mt-1">{s.notes}</p>}
               </div>))}</div>)}

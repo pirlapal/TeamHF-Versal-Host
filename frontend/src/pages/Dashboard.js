@@ -57,11 +57,28 @@ export default function Dashboard() {
           </h1>
           <p className="text-sm text-[#9CA3AF] mt-1">Here's what's happening today</p>
         </div>
-        {stats.pending_count > 0 && (
-          <Badge variant="outline" className="border-[#FDE68A] text-[#F59E0B] bg-[#FFFBEB] text-xs rounded-full gap-1 px-3" data-testid="pending-badge">
-            <Clock className="h-3 w-3" /> {stats.pending_count} pending approvals
-          </Badge>
-        )}
+        <div className="flex items-center gap-3">
+          {stats.pending_count > 0 && (
+            <Badge variant="outline" className="border-[#FDE68A] text-[#F59E0B] bg-[#FFFBEB] text-xs rounded-full gap-1 px-3" data-testid="pending-badge">
+              <Clock className="h-3 w-3" /> {stats.pending_count} pending approvals
+            </Badge>
+          )}
+          {user?.role === "ADMIN" && (
+            <Button variant="outline" size="sm" onClick={async () => {
+              try {
+                const response = await api.get("/reports/dashboard-csv", { responseType: "blob" });
+                const blob = new Blob([response.data], { type: "text/csv" });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "dashboard_export.csv";
+                link.click();
+                URL.revokeObjectURL(link.href);
+              } catch {}
+            }} className="border-[#E5E7EB] text-[#6B7280] rounded-lg gap-1.5 text-xs h-8 hover:border-[#F97316] hover:text-[#F97316]" data-testid="dashboard-csv-export">
+              <FileDown className="h-3.5 w-3.5" /> Export CSV
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Stat Cards */}
