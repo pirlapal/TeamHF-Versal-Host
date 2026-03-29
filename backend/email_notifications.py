@@ -4,7 +4,8 @@ from config import logger
 
 # EmailJS Configuration
 EMAILJS_SERVICE_ID = os.getenv("EMAILJS_SERVICE_ID", "service_g0yq4qg")
-EMAILJS_TEMPLATE_ID = os.getenv("EMAILJS_TEMPLATE_ID", "template_wp63bpe")
+EMAILJS_TEMPLATE_CLIENT_ONBOARDING = os.getenv("EMAILJS_TEMPLATE_CLIENT_ONBOARDING", "template_wp63bpe")
+EMAILJS_TEMPLATE_USER_INVITATION = os.getenv("EMAILJS_TEMPLATE_USER_INVITATION", "template_tmgrado")
 EMAILJS_PUBLIC_KEY = os.getenv("EMAILJS_PUBLIC_KEY", "kkB5lP8Fm-9ihoZnF")
 EMAILJS_PRIVATE_KEY = os.getenv("EMAILJS_PRIVATE_KEY", "")
 EMAILJS_API_URL = "https://api.emailjs.com/api/v1.0/email/send"
@@ -35,7 +36,7 @@ async def send_client_onboarding_email(admin_email: str, admin_name: str, client
 
         payload = {
             "service_id": EMAILJS_SERVICE_ID,
-            "template_id": EMAILJS_TEMPLATE_ID,
+            "template_id": EMAILJS_TEMPLATE_CLIENT_ONBOARDING,
             "user_id": EMAILJS_PUBLIC_KEY,
             "template_params": {
                 "admin_name": admin_name,
@@ -89,7 +90,7 @@ async def send_user_invitation_email(invite_email: str, user_name: str, role: st
 
         payload = {
             "service_id": EMAILJS_SERVICE_ID,
-            "template_id": "template_tmgrado",  # User invitation template
+            "template_id": EMAILJS_TEMPLATE_USER_INVITATION,
             "user_id": EMAILJS_PUBLIC_KEY,
             "template_params": {
                 "name": user_name,
