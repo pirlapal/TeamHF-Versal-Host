@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Test - HackForge</title>
+    <style>
+        body { font-family: system-ui; padding: 20px; max-width: 800px; margin: 0 auto; background: #fafaf8; }
+        .card { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; border: 1px solid #e8e8e8; }
+        button { background: #f97316; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; margin: 5px; }
+        button:hover { background: #ea580c; }
+        pre { background: #f3f4f6; padding: 15px; border-radius: 6px; overflow-x: auto; }
+        .success { color: #16a34a; font-weight: bold; }
+        .error { color: #dc2626; font-weight: bold; }
+        .info { color: #2563eb; }
+        h1 { color: #1f2937; }
+        h2 { color: #4b5563; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <h1>🔐 HackForge Auth & Permission Test</h1>
+
+    <div class="card">
+        <h2>Test Demo Users</h2>
+        <button onclick="testLogin('caseworker@demo.caseflow.io', 'demo1234', 'Case Worker')">Test Case Worker</button>
+        <button onclick="testLogin('volunteer@demo.caseflow.io', 'demo1234', 'Volunteer')">Test Volunteer</button>
+        <button onclick="testLogin('admin@caseflow.io', 'admin123', 'Admin')">Test Admin</button>
+    </div>
+
+    <div class="card">
+        <h2>Test Results</h2>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8001/api';
+
+        async function testLogin(email, password, roleName) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `<p class="info">Testing ${roleName} (${email})...</p>`;
+
+            try {
+                // Step 1: Login
+                const loginRes = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (!loginRes.ok) {
+                    resultsDiv.innerHTML = `<p class="error">❌ Login failed: ${loginRes.status}</p>`;
+                    return;
+                }
+
+                const loginData = await loginRes.json();
+
+                // Step 2: Get /auth/me (what the frontend should call)
+                const meRes = await fetch(`${API_BASE}/auth/me`, {
+                    credentials: 'include'
+                });
+
+                if (!meRes.ok) {
+                    resultsDiv.innerHTML = `<p class="error">❌ /auth/me failed: ${meRes.status}</p>`;
+                    return;
+                }
+
+                const meData = await meRes.json();
+
+                // Step 3: Check permissions
+                const navPermissions = {
+                    'Dashboard': true, // Always visible
+                    'Clients': meData.permissions?.includes('clients.read'),
+                    'Calendar': meData.permissions?.includes('visits.read'),
+                    'Payments': meData.permissions?.includes('payments.read'),
+                    'Reports': meData.permissions?.includes('reports.read'),
+                    'Messages': meData.permissions?.includes('messages.read'),
+                    'Settings': meData.permissions?.includes('admin.settings')
+                };
+
+                const visibleTabs = Object.entries(navPermissions)
+                    .filter(([_, visible]) => visible)
+                    .map(([name]) => name);
+
+                resultsDiv.innerHTML = `
+                    <div class="success">✅ ${roleName} Login Successful</div>
+                    <pre><strong>User Info:</strong>
+Email: ${meData.email}
+Role: ${meData.role}
+Has Permissions: ${!!meData.permissions}
+Permission Count: ${meData.permissions?.length || 0}
+
+<strong>Sidebar Navigation (${visibleTabs.length} tabs visible):</strong>
+${visibleTabs.map(tab => `  ✓ ${tab}`).join('\n')}
+
+<strong>All Permissions:</strong>
+${JSON.stringify(meData.permissions, null, 2)}</pre>
+                `;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -249,7 +249,6 @@ DEFAULT_PERMISSIONS = {
         "visits.read",
         "outcomes.read",
         "follow_ups.read",
-        "messages.read",
         "storage.read",
     ],
 }

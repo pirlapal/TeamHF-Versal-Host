@@ -25,6 +25,19 @@ export default function Sidebar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
+  // Debug logging
+  React.useEffect(() => {
+    if (user) {
+      console.log('[Sidebar] User loaded:', {
+        email: user.email,
+        role: user.role,
+        hasPermissions: !!user.permissions,
+        permissionCount: user.permissions?.length,
+        permissions: user.permissions
+      });
+    }
+  }, [user]);
+
   const handleLogout = () => {
     logout();
     navigate("/login");

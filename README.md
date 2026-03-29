@@ -91,7 +91,7 @@ hackforge/
 ├── backend/
 │   ├── server.py                  # FastAPI entry point
 │   ├── config.py                  # Database & app configuration
-│   ├── helpers.py                 # Auth, email, utility functions
+│   ├── helpers.py                 # Auth, email, RBAC, utility functions
 │   ├── models/                    # Pydantic data models
 │   │   ├── auth.py, clients.py, services.py
 │   │   ├── payments.py, admin.py, ai.py, notifications.py
@@ -113,44 +113,144 @@ hackforge/
 │   │   │   └── ClientWizard.js, Onboarding.js
 │   │   └── __tests__/             # Property-based tests (fast-check)
 │   └── public/
+│       └── test-auth.html         # Permission testing utility
 └── memory/                        # Project documentation
 ```
 
 ---
 
+## Demo Accounts
+
+HackForge includes 3 pre-configured demo accounts with different permission levels:
+
+| Role | Email | Password | Sidebar Tabs | Permissions |
+|------|-------|----------|--------------|-------------|
+| **Admin** | `admin@caseflow.io` | `admin123` | 7 tabs (all) | Full access to all features |
+| **Case Worker** | `caseworker@demo.caseflow.io` | `demo1234` | 5 tabs | Create/manage clients, services, visits, payments, messages |
+| **Volunteer** | `volunteer@demo.caseflow.io` | `demo1234` | 3 tabs | Read-only access to clients, services, visits |
+
+### First-Time Setup
+
+1. Log in as **Admin** (`admin@caseflow.io` / `admin123`)
+2. Go to **Settings** → **Demo Data**
+3. Click **"Seed Demo Data"** to create:
+   - 12 demo clients with services and outcomes
+   - Case Worker and Volunteer user accounts
+   - Sample visits, payments, and notifications
+
+---
+
+## Role-Based Access Control (RBAC)
+
+### Navigation Visibility by Role
+
+The sidebar dynamically shows/hides navigation items based on user permissions:
+
+| Navigation Item | Permission Required | Admin | Case Worker | Volunteer |
+|----------------|---------------------|-------|-------------|-----------|
+| **Dashboard** | _(always visible)_ | ✅ | ✅ | ✅ |
+| **Clients** | `clients.read` | ✅ | ✅ | ✅ |
+| **Calendar** | `visits.read` | ✅ | ✅ | ✅ |
+| **Payments** | `payments.read` | ✅ | ✅ | ❌ |
+| **Reports** | `reports.read` | ✅ | ❌ | ❌ |
+| **Messages** | `messages.read` | ✅ | ✅ | ❌ |
+| **Settings** | `admin.settings` | ✅ | ❌ | ❌ |
+
+### Default Permissions by Role
+
+#### Admin (33 permissions)
+```
+clients.create, clients.read, clients.update, clients.delete, clients.import, clients.approve
+services.create, services.read
+visits.create, visits.read, visits.update
+outcomes.create, outcomes.read, outcomes.update
+follow_ups.create, follow_ups.read, follow_ups.update
+payments.create, payments.read, payments.update
+reports.read, reports.export
+messages.create, messages.read
+admin.users, admin.settings, admin.vocabulary, admin.roles
+demo.seed, demo.clear
+ai.copilot, ai.templates
+storage.upload, storage.read, storage.delete
+```
+
+#### Case Worker (23 permissions)
+```
+clients.create, clients.read, clients.update, clients.import
+services.create, services.read
+visits.create, visits.read, visits.update
+outcomes.create, outcomes.read, outcomes.update
+follow_ups.create, follow_ups.read, follow_ups.update
+payments.create, payments.read
+messages.create, messages.read
+ai.copilot, ai.templates
+storage.upload, storage.read
+```
+
+#### Volunteer (6 permissions)
+```
+clients.read
+services.read
+visits.read
+outcomes.read
+follow_ups.read
+storage.read
+```
+
+### Custom Roles
+
+Admins can create custom roles with specific permission sets via the Admin Settings page. Custom role permissions override default role permissions.
+
+---
+
 ## API Endpoints
 
+### Authentication
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/auth/login` | User login |
 | POST | `/api/auth/register` | User registration |
+| POST | `/api/onboard` | Organization onboarding |
+| GET | `/api/auth/me` | Get current user with permissions |
+| POST | `/api/auth/logout` | User logout |
+| POST | `/api/auth/refresh` | Refresh access token |
+
+### Clients
+| Method | Endpoint | Description |
+|---|---|---|
 | GET | `/api/clients` | List clients (with filtering) |
 | POST | `/api/clients` | Create client |
 | POST | `/api/clients/check-duplicate` | Check for duplicate contacts |
 | GET | `/api/clients/{id}` | Get client details |
+| PUT | `/api/clients/{id}` | Update client |
+| DELETE | `/api/clients/{id}` | Delete client |
+
+### Services & Visits
+| Method | Endpoint | Description |
+|---|---|---|
 | POST | `/api/clients/{id}/services` | Log a service |
 | PUT | `/api/clients/{id}/services/{sid}` | Update service (72h window) |
 | GET | `/api/visits` | List visits |
 | POST | `/api/visits` | Schedule visit |
 | POST | `/api/visits/check-conflicts` | Check scheduling conflicts |
+
+### Dashboard & Reports
+| Method | Endpoint | Description |
+|---|---|---|
 | GET | `/api/dashboard/stats` | Dashboard statistics |
 | GET | `/api/dashboard/trends` | Activity trends |
 | GET | `/api/dashboard/demographics` | Client demographics breakdown |
 | GET | `/api/reports/dashboard-csv` | Export dashboard as CSV |
 | POST | `/api/reports/narrative` | AI narrative report generation |
 | GET | `/api/reports/org/pdf` | Organization PDF report |
-| POST | `/api/demo/seed` | Seed demo data |
-| POST | `/api/demo/clear` | Clear organization data |
 
----
-
-## Demo Accounts
-
-| Role | Email | Password |
+### Demo & Admin
+| Method | Endpoint | Description |
 |---|---|---|
-| Admin | `admin@caseflow.io` | `admin123` |
-| Case Worker | `caseworker@demo.caseflow.io` | `demo1234` |
-| Volunteer | `volunteer@demo.caseflow.io` | `demo1234` |
+| POST | `/api/demo/seed` | Seed demo data (Admin only) |
+| POST | `/api/demo/clear` | Clear organization data (Admin only) |
+| GET | `/api/admin/users` | List organization users |
+| POST | `/api/invites` | Create user invite (Admin only) |
 
 ---
 
@@ -162,18 +262,109 @@ hackforge/
 |---|---|---|
 | `MONGO_URL` | Yes | MongoDB connection string |
 | `DB_NAME` | Yes | Database name |
-| `JWT_SECRET` | Yes | Secret for JWT signing |
+| `JWT_SECRET` | Yes | Secret for JWT signing (change in production!) |
 | `ADMIN_EMAIL` | No | Default admin email |
 | `ADMIN_PASSWORD` | No | Default admin password |
 | `HF_TOKEN` | No | Hugging Face API token (AI features) |
 | `SENDGRID_API_KEY` | No | SendGrid API key (email notifications) |
 | `STRIPE_SECRET_KEY` | No | Stripe secret key (payments) |
+| `EMERGENT_LLM_KEY` | No | Emergent Agent LLM key (AI features) |
+| `SENDER_EMAIL` | No | Sender email for notifications |
 
 ### Frontend (`frontend/.env`)
 
 | Variable | Required | Description |
 |---|---|---|
 | `REACT_APP_BACKEND_URL` | Yes | Backend API base URL |
+| `REACT_APP_EMAILJS_SERVICE_ID` | No | EmailJS service ID |
+| `REACT_APP_EMAILJS_TEMPLATE_ID` | No | EmailJS template ID |
+| `REACT_APP_EMAILJS_PUBLIC_KEY` | No | EmailJS public key |
+
+---
+
+## Testing
+
+### Automated Tests
+
+```bash
+# Frontend property tests (23 tests with fast-check)
+cd frontend && yarn test --watchAll=false
+
+# Backend tests
+cd backend && python -m pytest tests/ -v
+```
+
+### Permission Testing Utility
+
+Visit [http://localhost/test-auth.html](http://localhost/test-auth.html) to test user permissions:
+
+1. Click "Test Case Worker" → Verify 5 visible tabs
+2. Click "Test Volunteer" → Verify 3 visible tabs
+3. Click "Test Admin" → Verify 7 visible tabs
+
+This utility tests the authentication flow and displays:
+- ✅ Login status
+- 📊 Permission count per role
+- 📝 List of visible sidebar tabs
+- 🔍 Complete permission list
+
+---
+
+## Troubleshooting
+
+### Permissions Not Showing After Login
+
+**Symptom**: Users see Dashboard only, other sidebar tabs are missing
+
+**Solution**: Clear browser cache
+1. Press `Cmd + Shift + R` (Mac) or `Ctrl + Shift + F5` (Windows)
+2. Or open DevTools (F12) → Application → Clear site data
+3. Log out and log back in
+4. Verify in browser console:
+   ```
+   [AuthContext] User loaded: {email: "...", role: "...", permissionCount: XX}
+   [Sidebar] User loaded: {...}
+   ```
+
+**Alternative**: Use Incognito/Private browsing window
+
+### Demo Data Seeding
+
+**Issue**: Demo users don't exist
+
+**Solution**:
+1. Log in as Admin (`admin@caseflow.io` / `admin123`)
+2. Navigate to Settings → Demo Data
+3. Click "Seed Demo Data"
+4. Demo users (Case Worker & Volunteer) will be created
+
+### MongoDB Connection Issues
+
+**Symptom**: Backend health check fails
+
+**Solution**:
+```bash
+# Check MongoDB is running
+docker compose logs mongodb
+
+# Restart services
+docker compose restart mongodb backend
+
+# Check health
+curl http://localhost:8001/api/health
+```
+
+### Container Not Starting
+
+```bash
+# View logs
+docker compose logs -f backend
+docker compose logs -f frontend
+
+# Rebuild from scratch
+docker compose down
+docker compose up --build -d
+```
 
 ---
 
@@ -203,15 +394,71 @@ Works with any Docker-compatible host: AWS ECS, GCP Cloud Run, Azure Container A
 
 ---
 
-## Testing
+## Development Workflow
 
-```bash
-# Frontend property tests (23 tests with fast-check)
-cd frontend && yarn test --watchAll=false
+### Adding New Permissions
 
-# Backend tests
-cd backend && python -m pytest tests/ -v
+1. Add permission to `DEFAULT_PERMISSIONS` in `backend/helpers.py`
+2. Add permission check to relevant route in `backend/routes/`
+3. Update sidebar navigation in `frontend/src/components/Sidebar.js`
+4. Add permission to route protection in `frontend/src/App.js`
+
+Example:
+```python
+# backend/helpers.py
+DEFAULT_PERMISSIONS = {
+    "ADMIN": [..., "new_feature.read", "new_feature.write"],
+    "CASE_WORKER": [..., "new_feature.read"],
+}
+
+# backend/routes/new_feature.py
+@router.get("/new-feature")
+async def get_feature(request: Request):
+    await require_permission(request, "new_feature.read")
+    # ... implementation
+
+# frontend/src/components/Sidebar.js
+const NAV_ITEMS = [
+    ...,
+    { to: "/new-feature", icon: Icon, permission: "new_feature.read" }
+]
 ```
+
+### Creating Custom Roles
+
+Admins can create custom roles via Settings → Roles:
+1. Navigate to Admin Settings
+2. Click "Create Custom Role"
+3. Select permissions from the 35 available options
+4. Assign role to users
+
+Custom roles override default role permissions and are stored per organization.
+
+---
+
+## Architecture Decisions
+
+### Why MongoDB?
+- Flexible schema for evolving nonprofit requirements
+- Embedded documents for client → services relationship
+- Easy horizontal scaling for multi-tenant architecture
+
+### Why FastAPI?
+- Async/await support for high concurrency
+- Automatic OpenAPI documentation
+- Pydantic validation for type safety
+- Fast performance (on par with Node.js)
+
+### Why JWT Cookies?
+- HttpOnly cookies prevent XSS attacks
+- Refresh token rotation for security
+- Stateless authentication scales easily
+
+### RBAC Implementation
+- Permission-based (not just role-based) for granular control
+- Default permissions per role + custom role overrides
+- Permissions returned with `/auth/me` for frontend use
+- Server-side enforcement on all protected routes
 
 ---
 
@@ -221,4 +468,24 @@ MIT
 
 ---
 
-**Built by HackForge Team**
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## Support
+
+- 📧 Email: support@hackforge.io
+- 🐛 Issues: [GitHub Issues](https://github.com/your-org/hackforge/issues)
+- 📚 Documentation: [docs.hackforge.io](https://docs.hackforge.io)
+
+---
+
+**Built with ❤️ by the HackForge Team**
+
+*Empowering nonprofits with modern case management tools*
