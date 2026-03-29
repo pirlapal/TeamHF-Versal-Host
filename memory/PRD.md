@@ -4,37 +4,52 @@
 Build a futuristic web application with all SaaS features for nonprofit case management with AI Copilot, Stripe payments, comprehensive client management, file attachments, CSV import/export, demo mode, and shareable invite links.
 
 ## Architecture
-- **Frontend**: React 19 + Tailwind CSS + Shadcn UI (bright cheerful theme: Nunito/DM Sans, coral+teal)
-- **Backend**: FastAPI (Python) + MongoDB via Motor
-- **Auth**: JWT-based (bcrypt + PyJWT, cookies + Bearer)
-- **Payments**: Stripe via emergentintegrations + Payment Requests system
-- **AI**: Hugging Face Inference API (Mistral-7B) with mock fallback + Action Templates
+- **Frontend**: React 19 + Tailwind CSS + Shadcn UI (bright cheerful theme)
+- **Backend**: FastAPI (Python) + MongoDB via Motor — Modular route structure
+- **Auth**: JWT-based (bcrypt + PyJWT)
+- **Payments**: Stripe + Payment Requests system
+- **AI**: Hugging Face Inference API (Mistral-7B) with mock fallback
 - **Storage**: Emergent Object Storage for file attachments
+- **PDF**: reportlab for PDF report generation
+
+## Backend Structure (Refactored)
+```
+/app/backend/
+├── server.py          (slim entry: app, CORS, router includes, startup)
+├── config.py          (env vars, DB, constants)
+├── helpers.py         (auth, serialization, storage, HF AI, notifications)
+├── models/            (Pydantic request models)
+│   ├── auth.py, clients.py, services.py, payments.py, admin.py, ai.py, notifications.py
+├── routes/            (14 API route modules)
+│   ├── auth.py, clients.py, services.py, visits.py, outcomes.py
+│   ├── dashboard.py, payments.py, admin.py, ai.py
+│   ├── storage.py, demo.py, reports.py, notifications.py, messages.py
+```
 
 ## What's Been Implemented
 
-### Phase 1 (MVP) - 2026-03-29
+### Phase 1 (MVP)
 - JWT auth, onboarding, client CRUD, services, visits, outcomes, dashboard, Stripe, admin settings, CSV export
 
-### Phase 2 (Enhancements) - 2026-03-29
+### Phase 2 (Enhancements)
 - AI Copilot (HF + fallback), file attachments, CSV import, demo mode, shareable invites
 
-### Phase 3 (AI Templates + UI + Demo Users) - 2026-03-29
-- AI action templates: Create Client, Schedule Visit, Log Service, Add Outcome Goal
-- Confirmation popup with editable fields before AI executes actions
-- Demo user credentials: Case Worker, Volunteer
-- Complete UI overhaul: warm cream, coral primary, teal accent
+### Phase 3 (AI Templates + UI + Demo Users)
+- AI action templates with confirmation popups, demo user credentials, bright/cheerful UI overhaul
 
-### Phase 4 (Onboarding Wizard + Payments + Clear Data) - 2026-03-29
-- **Client Onboarding Wizard**: TurboTax-like 4-step wizard (Personal Info -> Demographics -> Services -> First Visit) with progress bar, animated transitions, review summary
-- **Payment Requests**: Send/track payment requests to clients with status management (PENDING/PAID/OVERDUE/CANCELLED), summary cards (Received/Pending/Overdue totals)
-- **Payments Page Redesign**: Tabs for Subscriptions, Payment Requests, History
-- **Mock Payment Data**: Demo Mode seeds payment requests and subscription transactions
-- **Clear All Data**: Button in Admin Settings Demo tab to wipe all organization data
-- **Onboard Wizard Button**: Added to Clients page for quick access
+### Phase 4 (Onboarding Wizard + Payments + Clear Data)
+- TurboTax-like 4-step client wizard, payment requests, mock payment data, clear all data
 
-## Test Results (Latest - Iteration 4)
-- Backend: 100% (14/14)
+### Phase 5 (Reports + Refactoring + Notifications + Messaging + Dashboard)
+- **Backend Refactoring**: Split monolithic server.py (~1500 lines) into 14 modular route files, separate models, config, helpers
+- **Advanced Reporting**: PDF reports (client + org) using reportlab, CSV export for services/visits/outcomes/payments
+- **Notification System**: In-app bell with unread badge, mark read/unread, auto-generated on events
+- **Team Messaging**: In-app messaging between team members with compose/reply/read tracking
+- **Enhanced Dashboard**: Activity widgets (recent clients, upcoming visits, overdue payments, quick actions), trend chart, outcome distribution
+- **Payments Redesigned**: Subscriptions removed, payment requests only with filter tabs (ALL/PENDING/PAID/OVERDUE/CANCELLED)
+
+## Test Results (Latest - Iteration 5)
+- Backend: 100% (36/36)
 - Frontend: 100%
 - All features working correctly
 
@@ -44,15 +59,11 @@ Build a futuristic web application with all SaaS features for nonprofit case man
 - Volunteer: volunteer@demo.caseflow.io / demo1234
 
 ## Key API Endpoints
-- POST /api/clients/wizard - Client onboarding wizard
-- POST /api/demo/clear - Clear all demo data
-- POST /api/payments/request - Send payment request
-- GET /api/payments/requests - List payment requests
-- PATCH /api/payments/requests/{id} - Update request status
-
-## Remaining Tasks (Backlog)
-- P1: Advanced Reporting & Export (PDF reports, outcome charts)
-- P2: Backend refactoring (split server.py into modular routes)
-- P2: Notification system (in-app alerts)
-- P3: Communication integrations (email/SMS)
-- P3: Custom dashboard widgets/layouts
+- Auth: POST /api/auth/login, /register, /logout, GET /api/auth/me
+- Clients: GET/POST /api/clients, POST /api/clients/wizard, /api/clients/import
+- Dashboard: GET /api/dashboard/stats, /trends, /outcomes, /activity
+- Reports: GET /api/reports/export, /export/{type}, /client/{id}/pdf, /org/pdf
+- Notifications: GET /api/notifications, /unread-count, PATCH /{id}/read, POST /read-all
+- Messages: GET/POST /api/messages, GET /{id}, POST /{id}/reply, GET /unread-count
+- Payments: POST /api/payments/request, GET /requests, PATCH /requests/{id}, GET /summary, /history
+- Demo: POST /api/demo/seed, /demo/clear
