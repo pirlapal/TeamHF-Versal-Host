@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "vercel-build": "yarn install && yarn build && cp -r build/* ."
+  }
+}
