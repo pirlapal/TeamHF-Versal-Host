@@ -224,40 +224,69 @@ async def create_client_wizard(data: ClientWizardCreate, request: Request):
 # ── CSV Import ──
 @router.post("/clients/import")
 async def import_clients_csv(request: Request, file: UploadFile = File(...)):
+    from config import logger
     user = await require_role(request, ["ADMIN"])
     tid = user.get("tenant_id")
-    data = await file.read()
-    text = data.decode("utf-8")
-    reader = csv.DictReader(io.StringIO(text))
-    imported = 0
-    skipped = 0
-    errors = []
-    for row_num, row in enumerate(reader, start=2):
-        name = row.get("name", "").strip()
-        if not name:
-            skipped += 1
-            errors.append(f"Row {row_num}: Missing name")
-            continue
-        client_doc = {
-            "name": name,
-            "email": row.get("email", "").strip() or None,
-            "phone": row.get("phone", "").strip() or None,
-            "address": row.get("address", "").strip() or None,
-            "demographics": {},
-            "custom_fields": {},
-            "notes": row.get("notes", "").strip() or "",
-            "pending": False,
-            "is_archived": False,
-            "tenant_id": tid,
-            "created_by": user["id"],
-            "updated_by": user["id"],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        try:
-            await db.clients.insert_one(client_doc)
-            imported += 1
-        except Exception as e:
-            skipped += 1
-            errors.append(f"Row {row_num}: {str(e)[:50]}")
-    return {"imported": imported, "skipped": skipped, "errors": errors[:20]}
+
+    try:
+        # Read and decode file
+        data = await file.read()
+        if not data:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+        text = data.decode("utf-8")
+        reader = csv.DictReader(io.StringIO(text))
+
+        # Validate CSV has required columns
+        if not reader.fieldnames or "name" not in reader.fieldnames:
+            raise HTTPException(status_code=400, detail="CSV must have a 'name' column")
+
+        imported = 0
+        skipped = 0
+        errors = []
+
+        logger.info(f"📥 Starting CSV import for tenant {tid}, user {user['id']}")
+
+        for row_num, row in enumerate(reader, start=2):
+            name = row.get("name", "").strip()
+            if not name:
+                skipped += 1
+                errors.append(f"Row {row_num}: Missing name")
+                continue
+
+            client_doc = {
+                "name": name,
+                "email": row.get("email", "").strip() or None,
+                "phone": row.get("phone", "").strip() or None,
+                "address": row.get("address", "").strip() or None,
+                "demographics": {},
+                "custom_fields": {},
+                "notes": row.get("notes", "").strip() or "",
+                "pending": False,
+                "is_archived": False,
+                "tenant_id": tid,
+                "created_by": user["id"],
+                "updated_by": user["id"],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+            try:
+                await db.clients.insert_one(client_doc)
+                imported += 1
+            except Exception as e:
+                skipped += 1
+                error_msg = str(e)[:100]
+                errors.append(f"Row {row_num}: {error_msg}")
+                logger.error(f"CSV import error row {row_num}: {error_msg}")
+
+        logger.info(f"✅ CSV import complete: {imported} imported, {skipped} skipped")
+        return {"imported": imported, "skipped": skipped, "errors": errors[:20]}
+
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid file encoding. Please use UTF-8 CSV")
+    except csv.Error as e:
+        raise HTTPException(status_code=400, detail=f"CSV parsing error: {str(e)}")
+    except Exception as e:
+        logger.error(f"CSV import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")

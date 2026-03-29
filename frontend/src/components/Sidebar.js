@@ -11,12 +11,12 @@ import {
 
 const NAV_ITEMS = [
   { to: "/dashboard", vocabKey: "dashboard", i18nKey: "nav.dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
-  { to: "/clients", vocabKey: "clients", i18nKey: "nav.clients", icon: Users, testId: "nav-clients" },
-  { to: "/calendar", vocabKey: "calendar", i18nKey: "nav.calendar", icon: Calendar, testId: "nav-calendar" },
-  { to: "/payments", vocabKey: "payments", i18nKey: "nav.payments", icon: CreditCard, testId: "nav-payments" },
-  { to: "/reports", vocabKey: "reports", i18nKey: "nav.reports", icon: FileText, testId: "nav-reports", roles: ["ADMIN"] },
-  { to: "/messages", vocabKey: "messages", i18nKey: "nav.messages", icon: Mail, testId: "nav-messages", roles: ["ADMIN", "CASE_WORKER"] },
-  { to: "/settings", vocabKey: "settings", i18nKey: "nav.settings", icon: Settings, testId: "nav-settings", roles: ["ADMIN"] },
+  { to: "/clients", vocabKey: "clients", i18nKey: "nav.clients", icon: Users, testId: "nav-clients", permission: "clients.read" },
+  { to: "/calendar", vocabKey: "calendar", i18nKey: "nav.calendar", icon: Calendar, testId: "nav-calendar", permission: "visits.read" },
+  { to: "/payments", vocabKey: "payments", i18nKey: "nav.payments", icon: CreditCard, testId: "nav-payments", permission: "payments.read" },
+  { to: "/reports", vocabKey: "reports", i18nKey: "nav.reports", icon: FileText, testId: "nav-reports", permission: "reports.read" },
+  { to: "/messages", vocabKey: "messages", i18nKey: "nav.messages", icon: Mail, testId: "nav-messages", permission: "messages.read" },
+  { to: "/settings", vocabKey: "settings", i18nKey: "nav.settings", icon: Settings, testId: "nav-settings", permission: "admin.settings" },
 ];
 
 export default function Sidebar() {
@@ -42,7 +42,12 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.filter(item => !item.roles || item.roles.includes(user?.role)).map((item) => {
+        {NAV_ITEMS.filter(item => {
+          // Dashboard is always visible
+          if (!item.permission) return true;
+          // Check if user has the required permission
+          return user?.permissions?.includes(item.permission);
+        }).map((item) => {
           const Icon = item.icon;
           return (
             <NavLink

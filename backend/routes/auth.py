@@ -56,7 +56,11 @@ async def logout(response: Response):
 
 @router.get("/auth/me")
 async def get_me(request: Request):
-    return await get_current_user(request)
+    from helpers import get_user_permissions
+    user = await get_current_user(request)
+    # Include permissions in user response for dynamic permission checking
+    user["permissions"] = await get_user_permissions(user)
+    return user
 
 @router.post("/auth/refresh")
 async def refresh_token_endpoint(request: Request, response: Response):
