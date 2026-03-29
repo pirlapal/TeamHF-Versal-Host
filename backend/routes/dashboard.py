@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from bson import ObjectId
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
@@ -22,19 +22,27 @@ async def dashboard_stats(request: Request):
             "outcome_count": outcomes, "pending_count": pending, "unread_notifications": unread_notifs}
 
 @router.get("/dashboard/trends")
-async def dashboard_trends(request: Request, range: str = "month"):
+async def dashboard_trends(request: Request, time_range: str = Query(default="month", alias="range")):
     user = await get_current_user(request)
     tid = user.get("tenant_id")
     now = datetime.now(timezone.utc)
-    if range == "week":
+    if time_range == "week":
         start = now - timedelta(days=7)
-    elif range == "quarter":
+        days = 7
+    elif time_range == "quarter":
         start = now - timedelta(days=90)
-    elif range == "year":
+        days = 90
+    elif time_range == "year":
         start = now - timedelta(days=365)
+        days = 365
     else:
         start = now - timedelta(days=30)
+        days = 30
     start_str = start.isoformat()
+
+    # Generate full date range
+    all_dates = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days + 1)]
+
     services = await db.service_logs.find({"tenant_id": tid, "service_date": {"$gte": start.strftime("%Y-%m-%d")}}).to_list(1000)
     visits = await db.visits.find({"tenant_id": tid, "date": {"$gte": start_str}}).to_list(1000)
     service_by_date = defaultdict(int)
@@ -45,7 +53,8 @@ async def dashboard_trends(request: Request, range: str = "month"):
     for v in visits:
         d = v.get("date", v.get("created_at", ""))[:10]
         visit_by_date[d] += 1
-    all_dates = sorted(set(list(service_by_date.keys()) + list(visit_by_date.keys())))
+
+    # Return all dates with zero-filled data
     return [{"date": d, "service_count": service_by_date.get(d, 0), "visit_count": visit_by_date.get(d, 0)} for d in all_dates]
 
 @router.get("/dashboard/demographics")

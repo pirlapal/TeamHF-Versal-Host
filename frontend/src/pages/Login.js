@@ -81,7 +81,7 @@ export default function Login() {
           <div className="text-center">
             <p className="text-sm text-[#9CA3AF]">
               New organization?{" "}
-              <Link to="/onboard" className="text-[#F97316] hover:underline font-semibold" data-testid="onboard-link">Create account</Link>
+              <Link to="/onboarding" className="text-[#F97316] hover:underline font-semibold" data-testid="onboard-link">Create account</Link>
             </p>
           </div>
 

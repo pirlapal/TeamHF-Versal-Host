@@ -127,35 +127,41 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Activity Trend Chart */}
-        {trends.length > 0 && (
-          <div className="bg-white border border-[#E8E8E8] rounded-xl p-5" data-testid="trend-chart">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="h-4 w-4 text-[#F97316]" />
-              <span className="text-sm font-bold font-['Nunito'] text-[#1F2937]">Activity Trend (30 days)</span>
-            </div>
-            <div className="flex items-end gap-1 h-28">
-              {trends.slice(-14).map((t, i) => {
-                const max = Math.max(...trends.slice(-14).map(d => d.service_count + d.visit_count), 1);
-                const val = t.service_count + t.visit_count;
-                const pct = (val / max) * 100;
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group" title={`${t.date}: ${val} activities`}>
-                    <span className="text-[8px] text-[#9CA3AF] opacity-0 group-hover:opacity-100 transition-opacity">{val}</span>
-                    <div className="w-full rounded-t transition-all duration-300 group-hover:opacity-100" style={{
-                      height: `${Math.max(pct, 4)}%`,
-                      backgroundColor: val > 0 ? "#F97316" : "#F3F4F6",
-                      opacity: val > 0 ? 0.9 : 0.5,
-                    }} />
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex justify-between mt-1">
-              <span className="text-[8px] text-[#D1D5DB] font-mono">{trends[Math.max(0, trends.length - 14)]?.date?.slice(5)}</span>
-              <span className="text-[8px] text-[#D1D5DB] font-mono">{trends[trends.length - 1]?.date?.slice(5)}</span>
-            </div>
+        <div className="bg-white border border-[#E8E8E8] rounded-xl p-5" data-testid="trend-chart">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="h-4 w-4 text-[#F97316]" />
+            <span className="text-sm font-bold font-['Nunito'] text-[#1F2937]">Activity Trend (30 days)</span>
           </div>
-        )}
+          {trends.length > 0 ? (
+            <>
+              <div className="flex items-end gap-1 h-32">
+                {trends.slice(-30).map((t, i) => {
+                  const max = Math.max(...trends.map(d => d.service_count + d.visit_count), 1);
+                  const val = t.service_count + t.visit_count;
+                  const pct = max > 0 ? (val / max) * 100 : 0;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center justify-end gap-0.5 group" title={`${t.date}: ${val} activities`}>
+                      <span className="text-[8px] text-[#9CA3AF] opacity-0 group-hover:opacity-100 transition-opacity mb-auto">{val}</span>
+                      <div className="w-full rounded-t transition-all duration-300" style={{
+                        height: val > 0 ? `${Math.max(pct, 10)}%` : "2px",
+                        backgroundColor: val > 0 ? "#F97316" : "#F3F4F6",
+                        opacity: val > 0 ? 1 : 0.4,
+                      }} />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-between mt-2">
+                <span className="text-[8px] text-[#D1D5DB] font-mono">{trends[0]?.date?.slice(5) || ''}</span>
+                <span className="text-[8px] text-[#D1D5DB] font-mono">{trends[trends.length - 1]?.date?.slice(5) || ''}</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-32">
+              <p className="text-xs text-[#9CA3AF]">Loading activity data...</p>
+            </div>
+          )}
+        </div>
 
         {/* Outcome Distribution */}
         {totalOutcomes > 0 && (
