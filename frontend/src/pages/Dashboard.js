@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Users, Briefcase, Calendar, Target, TrendingUp,
-  Clock, AlertTriangle, UserPlus, Wand2, FileDown, Bell
+  Clock, AlertTriangle, UserPlus, Wand2, FileDown, Bell, BarChart3
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -16,20 +16,23 @@ export default function Dashboard() {
   const [trends, setTrends] = useState([]);
   const [outcomeStats, setOutcomeStats] = useState([]);
   const [activity, setActivity] = useState({});
+  const [demographics, setDemographics] = useState([]);
 
   useEffect(() => {
     const fetch = async () => {
       try {
-        const [s, t, o, a] = await Promise.all([
+        const [s, t, o, a, d] = await Promise.all([
           api.get("/dashboard/stats"),
           api.get("/dashboard/trends?range=month"),
           api.get("/dashboard/outcomes"),
           api.get("/dashboard/activity"),
+          api.get("/dashboard/demographics"),
         ]);
         setStats(s.data);
         setTrends(t.data);
         setOutcomeStats(o.data);
         setActivity(a.data);
+        setDemographics(d.data);
       } catch {}
     };
     fetch();
@@ -124,7 +127,7 @@ export default function Dashboard() {
                     <div className="w-full rounded-t transition-all duration-300 group-hover:opacity-100" style={{
                       height: `${Math.max(pct, 4)}%`,
                       backgroundColor: val > 0 ? "#F97316" : "#F3F4F6",
-                      opacity: 0.7,
+                      opacity: val > 0 ? 0.9 : 0.5,
                     }} />
                   </div>
                 );
@@ -238,6 +241,43 @@ export default function Dashboard() {
                   <span className="text-sm font-bold font-mono text-[#EF4444]">${p.amount?.toFixed(2)}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Demographics Breakdown Chart (R27.1) */}
+        {demographics.length > 0 && (
+          <div className="bg-white border border-[#E8E8E8] rounded-xl p-5 lg:col-span-2" data-testid="demographics-chart">
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart3 className="h-4 w-4 text-[#8B5CF6]" />
+              <span className="text-sm font-bold font-['Nunito'] text-[#1F2937]">Client Demographics</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {demographics.map((cat) => {
+                const maxCount = Math.max(...cat.items.map(i => i.count), 1);
+                const DEMO_COLORS = ["#F97316", "#14B8A6", "#6366F1", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
+                return (
+                  <div key={cat.category} data-testid={`demo-category-${cat.category}`}>
+                    <p className="text-xs font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">{cat.category.replace(/_/g, " ")}</p>
+                    <div className="space-y-2">
+                      {cat.items.map((item, idx) => {
+                        const pct = (item.count / maxCount) * 100;
+                        return (
+                          <div key={item.label} className="group">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-xs text-[#4B5563] truncate max-w-[150px]">{item.label}</span>
+                              <span className="text-xs font-bold text-[#1F2937] font-mono">{item.count}</span>
+                            </div>
+                            <div className="w-full h-2 bg-[#F3F4F6] rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: DEMO_COLORS[idx % DEMO_COLORS.length] }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

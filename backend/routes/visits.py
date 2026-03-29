@@ -30,6 +30,36 @@ async def list_visits(request: Request, from_date: str = "", to_date: str = ""):
 @router.post("/visits")
 async def create_visit(data: VisitCreate, request: Request):
     user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    # Conflict detection (R6.3)
+    if data.date:
+        from datetime import datetime as dt, timedelta
+        try:
+            visit_start = dt.fromisoformat(data.date.replace("Z", "+00:00"))
+            visit_end = visit_start + timedelta(minutes=data.duration or 60)
+            existing = await db.visits.find({
+                "tenant_id": user.get("tenant_id"),
+                "client_id": data.client_id,
+                "status": "SCHEDULED",
+            }).to_list(500)
+            conflicts = []
+            for ev in existing:
+                try:
+                    ev_start = dt.fromisoformat(ev["date"].replace("Z", "+00:00"))
+                    ev_end = ev_start + timedelta(minutes=ev.get("duration", 60))
+                    if visit_start < ev_end and visit_end > ev_start:
+                        conflicts.append({
+                            "id": str(ev["_id"]),
+                            "date": ev["date"],
+                            "duration": ev.get("duration", 60),
+                        })
+                except Exception:
+                    pass
+            if conflicts:
+                pass  # We still allow creation but return conflict info
+        except Exception:
+            conflicts = []
+    else:
+        conflicts = []
     doc = {
         "client_id": data.client_id,
         "tenant_id": user.get("tenant_id"),
@@ -46,13 +76,47 @@ async def create_visit(data: VisitCreate, request: Request):
     del doc["_id"]
     client = await db.clients.find_one({"_id": ObjectId(data.client_id)}, {"name": 1})
     doc["client_name"] = client["name"] if client else "Unknown"
+    if conflicts:
+        doc["conflicts"] = conflicts
     # Notify
     admins = await db.users.find({"tenant_id": user.get("tenant_id"), "role": {"$in": ["ADMIN", "CASE_WORKER"]}}).to_list(20)
     for a in admins:
         if str(a["_id"]) != user["id"]:
             await send_notification_email(user.get("tenant_id"), str(a["_id"]), "visit_scheduled",
-                f"Visit scheduled: {doc['client_name']}", f"{user.get('name')} scheduled a visit for {data.date[:10]}", f"/calendar")
+                f"Visit scheduled: {doc['client_name']}", f"{user.get('name')} scheduled a visit for {data.date[:10]}", "/calendar")
     return doc
+
+@router.post("/visits/check-conflicts")
+async def check_visit_conflicts(data: VisitCreate, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    conflicts = []
+    if data.date:
+        from datetime import datetime as dt, timedelta
+        try:
+            visit_start = dt.fromisoformat(data.date.replace("Z", "+00:00"))
+            visit_end = visit_start + timedelta(minutes=data.duration or 60)
+            existing = await db.visits.find({
+                "tenant_id": user.get("tenant_id"),
+                "client_id": data.client_id,
+                "status": "SCHEDULED",
+            }).to_list(500)
+            for ev in existing:
+                try:
+                    ev_start = dt.fromisoformat(ev["date"].replace("Z", "+00:00"))
+                    ev_end = ev_start + timedelta(minutes=ev.get("duration", 60))
+                    if visit_start < ev_end and visit_end > ev_start:
+                        client = await db.clients.find_one({"_id": ObjectId(ev.get("client_id", ""))}, {"name": 1})
+                        conflicts.append({
+                            "id": str(ev["_id"]),
+                            "date": ev["date"],
+                            "duration": ev.get("duration", 60),
+                            "client_name": client["name"] if client else "Unknown",
+                        })
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    return {"has_conflicts": len(conflicts) > 0, "conflicts": conflicts}
 
 @router.patch("/visits/{visit_id}")
 async def update_visit(visit_id: str, data: VisitUpdate, request: Request):

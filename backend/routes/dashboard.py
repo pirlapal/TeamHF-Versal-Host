@@ -48,6 +48,26 @@ async def dashboard_trends(request: Request, range: str = "month"):
     all_dates = sorted(set(list(service_by_date.keys()) + list(visit_by_date.keys())))
     return [{"date": d, "service_count": service_by_date.get(d, 0), "visit_count": visit_by_date.get(d, 0)} for d in all_dates]
 
+@router.get("/dashboard/demographics")
+async def dashboard_demographics(request: Request):
+    user = await get_current_user(request)
+    tid = user.get("tenant_id")
+    clients = await db.clients.find(
+        {"tenant_id": tid, "is_archived": {"$ne": True}},
+        {"demographics": 1}
+    ).to_list(5000)
+    demo_counts = defaultdict(lambda: defaultdict(int))
+    for c in clients:
+        demos = c.get("demographics") or {}
+        for key, val in demos.items():
+            if val:
+                demo_counts[key][str(val)] += 1
+    result = []
+    for category, values in demo_counts.items():
+        items = [{"label": k, "count": v} for k, v in sorted(values.items(), key=lambda x: -x[1])]
+        result.append({"category": category, "items": items[:10]})
+    return result
+
 @router.get("/dashboard/outcomes")
 async def dashboard_outcomes(request: Request):
     user = await get_current_user(request)

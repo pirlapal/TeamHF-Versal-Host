@@ -24,13 +24,39 @@ export default function CalendarPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ client_id: "", date: "", duration: 60, notes: "" });
   const [creating, setCreating] = useState(false);
+  const [conflictWarning, setConflictWarning] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => { setLoading(true); try { const [v, c] = await Promise.all([api.get("/visits"), api.get("/clients", { params: { page_size: 100 } })]); setVisits(v.data); setClients(c.data?.data || []); } catch (err) { console.error(err); } finally { setLoading(false); } };
     fetchData();
   }, []);
 
-  const handleCreate = async (e) => { e.preventDefault(); setCreating(true); try { const { data } = await api.post("/visits", form); setVisits([...visits, data]); setShowCreate(false); setForm({ client_id: "", date: "", duration: 60, notes: "" }); toast.success("Visit scheduled"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } finally { setCreating(false); } };
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    // Check conflicts before creating
+    if (!conflictWarning && form.client_id && form.date) {
+      try {
+        const { data: conflictCheck } = await api.post("/visits/check-conflicts", form);
+        if (conflictCheck.has_conflicts) {
+          setConflictWarning(conflictCheck.conflicts);
+          return;
+        }
+      } catch {}
+    }
+    setCreating(true);
+    setConflictWarning(null);
+    try {
+      const { data } = await api.post("/visits", form);
+      setVisits([...visits, data]);
+      setShowCreate(false);
+      setForm({ client_id: "", date: "", duration: 60, notes: "" });
+      toast.success("Visit scheduled");
+      if (data.conflicts?.length > 0) {
+        toast.warning(`Note: ${data.conflicts.length} scheduling conflict(s) detected`);
+      }
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    finally { setCreating(false); }
+  };
   const handleStatusChange = async (visitId, status) => { try { const { data } = await api.patch(`/visits/${visitId}`, { status }); setVisits(visits.map((v) => (v.id === visitId ? { ...v, ...data } : v))); toast.success(`Visit marked as ${status.toLowerCase()}`); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } };
 
   const visitsByDate = {};
@@ -65,7 +91,56 @@ export default function CalendarPage() {
               </div>); })}</div>
           </div>))}</div>)}
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}><DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] rounded-2xl" data-testid="create-visit-dialog"><DialogHeader><DialogTitle className="font-['Nunito'] font-bold">Schedule Visit</DialogTitle></DialogHeader><form onSubmit={handleCreate} className="space-y-4"><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Client *</Label><Select value={form.client_id} onValueChange={(v) => setForm({...form, client_id: v})}><SelectTrigger className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid="visit-client-select"><SelectValue placeholder="Select client" /></SelectTrigger><SelectContent className="bg-white border-[#E8E8E8] max-h-48 rounded-xl">{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Date & Time *</Label><Input type="datetime-local" value={form.date} onChange={(e) => setForm({...form, date: e.target.value})} required className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid="visit-date-input" /></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Duration (min)</Label><Input type="number" value={form.duration} onChange={(e) => setForm({...form, duration: parseInt(e.target.value) || 60})} min={15} max={480} step={15} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><DialogFooter><Button type="button" variant="ghost" onClick={() => setShowCreate(false)} className="text-[#9CA3AF] rounded-lg">Cancel</Button><Button type="submit" disabled={creating || !form.client_id} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold" data-testid="submit-visit">{creating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "Schedule"}</Button></DialogFooter></form></DialogContent></Dialog>
+      <Dialog open={showCreate} onOpenChange={(v) => { setShowCreate(v); if (!v) setConflictWarning(null); }}>
+        <DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] rounded-2xl" data-testid="create-visit-dialog">
+          <DialogHeader><DialogTitle className="font-['Nunito'] font-bold">Schedule Visit</DialogTitle></DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-[#6B7280] text-xs uppercase font-bold">Client *</Label>
+              <Select value={form.client_id} onValueChange={(v) => { setForm({...form, client_id: v}); setConflictWarning(null); }}>
+                <SelectTrigger className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid="visit-client-select"><SelectValue placeholder="Select client" /></SelectTrigger>
+                <SelectContent className="bg-white border-[#E8E8E8] max-h-48 rounded-xl">{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[#6B7280] text-xs uppercase font-bold">Date & Time *</Label>
+                <Input type="datetime-local" value={form.date} onChange={(e) => { setForm({...form, date: e.target.value}); setConflictWarning(null); }} required className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid="visit-date-input" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[#6B7280] text-xs uppercase font-bold">Duration (min)</Label>
+                <Input type="number" value={form.duration} onChange={(e) => setForm({...form, duration: parseInt(e.target.value) || 60})} min={15} max={480} step={15} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[#6B7280] text-xs uppercase font-bold">Notes</Label>
+              <Textarea value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" />
+            </div>
+            {conflictWarning && (
+              <div className="p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl space-y-2" data-testid="conflict-warning">
+                <div className="flex items-center gap-2 text-sm font-bold text-[#F59E0B]">
+                  <AlertTriangle className="h-4 w-4" /> Scheduling Conflict Detected
+                </div>
+                {conflictWarning.map((c, i) => (
+                  <div key={i} className="text-xs text-[#6B7280] bg-white p-2 rounded-lg border border-[#E5E7EB]">
+                    <span className="font-semibold text-[#1F2937]">{c.client_name}</span>
+                    <span className="mx-1">—</span>
+                    <span className="font-mono">{c.date?.slice(0,16).replace("T"," ")}</span>
+                    <span className="ml-1 text-[#9CA3AF]">({c.duration}min)</span>
+                  </div>
+                ))}
+                <p className="text-[10px] text-[#9CA3AF]">Click "Schedule Anyway" to proceed or change the date/time.</p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); setConflictWarning(null); }} className="text-[#9CA3AF] rounded-lg">Cancel</Button>
+              <Button type="submit" disabled={creating || !form.client_id} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold" data-testid="submit-visit">
+                {creating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : conflictWarning ? "Schedule Anyway" : "Schedule"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

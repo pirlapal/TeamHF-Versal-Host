@@ -9,7 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, ChevronLeft, ChevronRight, UserCheck, Clock, Upload, Download, Users, Wand2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, Plus, ChevronLeft, ChevronRight, UserCheck, Clock, Upload, Download, Users, Wand2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { formatApiError } from "@/lib/api";
 
@@ -26,22 +27,38 @@ export default function Clients() {
   const [page, setPage] = useState(1);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/clients", { params: { search, page, page_size: 25 } });
+      const { data } = await api.get("/clients", { params: { search, page, page_size: 25, status: statusFilter, date_from: dateFrom, date_to: dateTo } });
       setClients(data.data || []);
       setPagination(data.pagination || { page: 1, total_pages: 1, total_count: 0 });
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [search, page]);
+  }, [search, page, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => { fetchClients(); }, [fetchClients]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    // Check duplicates first
+    if (!duplicateWarning && (newClient.email || newClient.phone)) {
+      try {
+        const { data: dupCheck } = await api.post("/clients/check-duplicate", newClient);
+        if (dupCheck.has_duplicates) {
+          setDuplicateWarning(dupCheck.duplicates);
+          setCreating(false);
+          return;
+        }
+      } catch {}
+    }
     setCreating(true);
+    setDuplicateWarning(null);
     try {
       const { data } = await api.post("/clients", newClient);
       toast.success("Client created successfully");
@@ -111,10 +128,30 @@ export default function Clients() {
         )}
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D1D5DB]" />
-        <Input placeholder="Search clients..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="pl-10 bg-white border-[#E5E7EB] text-[#1F2937] placeholder:text-[#D1D5DB] h-10 rounded-lg" data-testid="client-search-input" />
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D1D5DB]" />
+          <Input placeholder="Search clients by name, email, phone..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="pl-10 bg-white border-[#E5E7EB] text-[#1F2937] placeholder:text-[#D1D5DB] h-10 rounded-lg" data-testid="client-search-input" />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === "all" ? "" : v); setPage(1); }}>
+          <SelectTrigger className="w-32 h-10 bg-white border-[#E5E7EB] text-[#6B7280] rounded-lg text-xs" data-testid="status-filter">
+            <SelectValue placeholder="All Status" />
+          </SelectTrigger>
+          <SelectContent className="bg-white border-[#E8E8E8] rounded-xl">
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }}
+          placeholder="From" className="w-36 h-10 bg-white border-[#E5E7EB] text-[#6B7280] rounded-lg text-xs" data-testid="date-from-filter" />
+        <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }}
+          placeholder="To" className="w-36 h-10 bg-white border-[#E5E7EB] text-[#6B7280] rounded-lg text-xs" data-testid="date-to-filter" />
+        {(statusFilter || dateFrom || dateTo) && (
+          <Button variant="ghost" size="sm" onClick={() => { setStatusFilter(""); setDateFrom(""); setDateTo(""); setPage(1); }}
+            className="text-[#9CA3AF] text-xs h-10 rounded-lg" data-testid="clear-filters-btn">Clear filters</Button>
+        )}
       </div>
 
       {importResult && (
@@ -219,9 +256,24 @@ export default function Clients() {
                 className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] min-h-[80px] rounded-lg" data-testid="new-client-notes" />
             </div>
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setShowCreate(false)} className="text-[#9CA3AF] rounded-lg">Cancel</Button>
+              {duplicateWarning && (
+                <div className="w-full p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl mb-3 space-y-2" data-testid="duplicate-warning">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[#F59E0B]">
+                    <AlertTriangle className="h-4 w-4" /> Possible duplicate detected
+                  </div>
+                  {duplicateWarning.map((d, i) => (
+                    <div key={i} className="text-xs text-[#6B7280] bg-white p-2 rounded-lg border border-[#E5E7EB]">
+                      <span className="font-semibold text-[#1F2937]">{d.name}</span>
+                      <span className="mx-1">—</span>
+                      <span>Matched on {d.match_type}: {d.match_type === "email" ? d.email : d.phone}</span>
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-[#9CA3AF]">Click "Create Anyway" to proceed or edit the details above.</p>
+                </div>
+              )}
+              <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); setDuplicateWarning(null); }} className="text-[#9CA3AF] rounded-lg">Cancel</Button>
               <Button type="submit" disabled={creating} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold gap-2" data-testid="create-client-submit">
-                {creating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "Create Client"}
+                {creating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : duplicateWarning ? "Create Anyway" : "Create Client"}
               </Button>
             </DialogFooter>
           </form>

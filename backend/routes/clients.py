@@ -12,16 +12,27 @@ from models.clients import ClientCreate, ClientUpdate, ClientWizardCreate
 router = APIRouter()
 
 @router.get("/clients")
-async def list_clients(request: Request, search: str = "", pending: Optional[bool] = None, page: int = 1, page_size: int = 25):
+async def list_clients(request: Request, search: str = "", pending: Optional[bool] = None, status: str = "", date_from: str = "", date_to: str = "", page: int = 1, page_size: int = 25):
     user = await get_current_user(request)
     tenant_id = user.get("tenant_id")
     query = {"tenant_id": tenant_id, "is_archived": {"$ne": True}}
     if pending is not None:
         query["pending"] = pending
+    if status == "active":
+        query["pending"] = False
+    elif status == "pending":
+        query["pending"] = True
+    if date_from:
+        query.setdefault("created_at", {})
+        query["created_at"]["$gte"] = date_from
+    if date_to:
+        query.setdefault("created_at", {})
+        query["created_at"]["$lte"] = date_to
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}},
+            {"phone": {"$regex": search, "$options": "i"}},
         ]
     total = await db.clients.count_documents(query)
     skip = (page - 1) * page_size
@@ -30,6 +41,28 @@ async def list_clients(request: Request, search: str = "", pending: Optional[boo
         "data": [serialize_doc(c) for c in clients],
         "pagination": {"page": page, "page_size": page_size, "total_count": total, "total_pages": max(1, (total + page_size - 1) // page_size)}
     }
+
+@router.post("/clients/check-duplicate")
+async def check_duplicate_client(data: ClientCreate, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    tid = user.get("tenant_id")
+    duplicates = []
+    if data.email:
+        email_match = await db.clients.find(
+            {"tenant_id": tid, "email": data.email, "is_archived": {"$ne": True}},
+            {"_id": 0, "name": 1, "email": 1, "phone": 1}
+        ).to_list(5)
+        for m in email_match:
+            duplicates.append({"match_type": "email", "name": m.get("name"), "email": m.get("email"), "phone": m.get("phone")})
+    if data.phone:
+        phone_match = await db.clients.find(
+            {"tenant_id": tid, "phone": data.phone, "is_archived": {"$ne": True}},
+            {"_id": 0, "name": 1, "email": 1, "phone": 1}
+        ).to_list(5)
+        for m in phone_match:
+            if not any(d.get("name") == m.get("name") and d.get("match_type") == "email" for d in duplicates):
+                duplicates.append({"match_type": "phone", "name": m.get("name"), "email": m.get("email"), "phone": m.get("phone")})
+    return {"has_duplicates": len(duplicates) > 0, "duplicates": duplicates}
 
 @router.post("/clients", status_code=201)
 async def create_client(data: ClientCreate, request: Request):
