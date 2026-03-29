@@ -19,11 +19,17 @@ async def list_visits(request: Request, from_date: str = "", to_date: str = ""):
         if isinstance(query["date"], dict):
             query["date"]["$lte"] = to_date
     visits = await db.visits.find(query).sort("date", 1).to_list(500)
+    # Batch fetch client names
+    client_ids = list(set(v.get("client_id", "") for v in visits if v.get("client_id")))
+    if client_ids:
+        clients_docs = await db.clients.find({"_id": {"$in": [ObjectId(cid) for cid in client_ids]}}, {"name": 1}).to_list(len(client_ids))
+        client_map = {str(c["_id"]): c.get("name", "Unknown") for c in clients_docs}
+    else:
+        client_map = {}
     result = []
     for v in visits:
         v_data = serialize_doc(v)
-        client = await db.clients.find_one({"_id": ObjectId(v_data["client_id"])}, {"name": 1})
-        v_data["client_name"] = client["name"] if client else "Unknown"
+        v_data["client_name"] = client_map.get(v_data.get("client_id", ""), "Unknown")
         result.append(v_data)
     return result
 
@@ -105,15 +111,25 @@ async def check_visit_conflicts(data: VisitCreate, request: Request):
                     ev_start = dt.fromisoformat(ev["date"].replace("Z", "+00:00"))
                     ev_end = ev_start + timedelta(minutes=ev.get("duration", 60))
                     if visit_start < ev_end and visit_end > ev_start:
-                        client = await db.clients.find_one({"_id": ObjectId(ev.get("client_id", ""))}, {"name": 1})
                         conflicts.append({
                             "id": str(ev["_id"]),
                             "date": ev["date"],
                             "duration": ev.get("duration", 60),
-                            "client_name": client["name"] if client else "Unknown",
+                            "client_id": ev.get("client_id", ""),
                         })
                 except Exception:
                     pass
+            # Batch fetch client names for conflicts
+            if conflicts:
+                conflict_cids = list(set(c["client_id"] for c in conflicts if c.get("client_id")))
+                if conflict_cids:
+                    conflict_clients = await db.clients.find({"_id": {"$in": [ObjectId(cid) for cid in conflict_cids]}}, {"name": 1}).to_list(len(conflict_cids))
+                    cmap = {str(c["_id"]): c.get("name", "Unknown") for c in conflict_clients}
+                else:
+                    cmap = {}
+                for c in conflicts:
+                    c["client_name"] = cmap.get(c.get("client_id", ""), "Unknown")
+                    del c["client_id"]
         except Exception:
             pass
     return {"has_conflicts": len(conflicts) > 0, "conflicts": conflicts}

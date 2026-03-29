@@ -88,9 +88,15 @@ async def dashboard_activity(request: Request):
     # Upcoming visits
     now = datetime.now(timezone.utc).isoformat()
     upcoming_visits = await db.visits.find({"tenant_id": tid, "date": {"$gte": now}, "status": "SCHEDULED"}).sort("date", 1).limit(5).to_list(5)
+    # Batch fetch client names
+    visit_client_ids = list(set(v.get("client_id", "") for v in upcoming_visits if v.get("client_id")))
+    if visit_client_ids:
+        visit_clients = await db.clients.find({"_id": {"$in": [ObjectId(cid) for cid in visit_client_ids]}}, {"name": 1}).to_list(len(visit_client_ids))
+        client_map = {str(c["_id"]): c.get("name", "Unknown") for c in visit_clients}
+    else:
+        client_map = {}
     for v in upcoming_visits:
-        client = await db.clients.find_one({"_id": ObjectId(v.get("client_id", ""))}, {"name": 1})
-        v["client_name"] = client["name"] if client else "Unknown"
+        v["client_name"] = client_map.get(v.get("client_id", ""), "Unknown")
     # Pending approvals
     pending_clients = await db.clients.find({"tenant_id": tid, "pending": True}).sort("created_at", -1).limit(5).to_list(5)
     # Overdue payment requests
