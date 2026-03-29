@@ -53,9 +53,22 @@ app.include_router(api_router)
 
 # CORS
 frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+allowed_origins = [
+    frontend_url,
+    "http://localhost:3000",
+    "http://localhost",
+]
+# Allow all Vercel preview and production URLs
+if "vercel" in frontend_url.lower():
+    allowed_origins.extend([
+        "https://*.vercel.app",  # Vercel production
+        frontend_url,
+    ])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url, "http://localhost:3000"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Allow all Vercel domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
