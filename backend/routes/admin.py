@@ -11,7 +11,7 @@ router = APIRouter()
 
 @router.get("/admin/vocabulary")
 async def get_vocabulary(request: Request):
-    user = await require_role(request, ["ADMIN"])
+    user = await get_current_user(request)
     vocab = await db.vocabulary_configs.find({"tenant_id": user.get("tenant_id")}).to_list(100)
     if not vocab:
         defaults = [
@@ -43,7 +43,7 @@ async def update_vocabulary(data: VocabularyUpdate, request: Request):
 
 @router.get("/admin/field-sets")
 async def get_field_sets(request: Request):
-    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    user = await get_current_user(request)
     field_sets = await db.field_sets.find({"tenant_id": user.get("tenant_id")}).to_list(100)
     return [serialize_doc(fs) for fs in field_sets]
 

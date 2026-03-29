@@ -1,6 +1,7 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Users, Calendar, CreditCard,
@@ -8,17 +9,18 @@ import {
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
-  { to: "/clients", label: "Clients", icon: Users, testId: "nav-clients" },
-  { to: "/calendar", label: "Calendar", icon: Calendar, testId: "nav-calendar" },
-  { to: "/payments", label: "Payments", icon: CreditCard, testId: "nav-payments" },
-  { to: "/reports", label: "Reports", icon: FileText, testId: "nav-reports", roles: ["ADMIN"] },
-  { to: "/messages", label: "Messages", icon: Mail, testId: "nav-messages", roles: ["ADMIN", "CASE_WORKER"] },
-  { to: "/settings", label: "Settings", icon: Settings, testId: "nav-settings", roles: ["ADMIN"] },
+  { to: "/dashboard", vocabKey: "dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+  { to: "/clients", vocabKey: "clients", icon: Users, testId: "nav-clients" },
+  { to: "/calendar", vocabKey: "calendar", icon: Calendar, testId: "nav-calendar" },
+  { to: "/payments", vocabKey: "payments", icon: CreditCard, testId: "nav-payments" },
+  { to: "/reports", vocabKey: "reports", icon: FileText, testId: "nav-reports", roles: ["ADMIN"] },
+  { to: "/messages", vocabKey: "messages", icon: Mail, testId: "nav-messages", roles: ["ADMIN", "CASE_WORKER"] },
+  { to: "/settings", vocabKey: "settings", icon: Settings, testId: "nav-settings", roles: ["ADMIN"] },
 ];
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
+  const { v } = useTenant();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -54,7 +56,7 @@ export default function Sidebar() {
               }
             >
               <Icon className="h-4 w-4" />
-              {item.label}
+              {v(item.vocabKey)}
             </NavLink>
           );
         })}

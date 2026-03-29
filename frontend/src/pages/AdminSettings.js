@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import api from "@/lib/api";
 import { formatApiError } from "@/lib/api";
+import { useTenant } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function AdminSettings() {
+  const { refreshVocab, refreshFieldSets } = useTenant();
   const [vocab, setVocab] = useState([]);
   const [users, setUsers] = useState([]);
   const [invites, setInvites] = useState([]);
@@ -55,7 +57,7 @@ export default function AdminSettings() {
   }, []);
 
   const handleVocabSave = async () => {
-    try { await api.put("/admin/vocabulary", { mappings: vocab }); toast.success("Vocabulary updated"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    try { await api.put("/admin/vocabulary", { mappings: vocab }); toast.success("Vocabulary updated"); refreshVocab(); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
   };
 
   const handleInvite = async (e) => {
@@ -146,6 +148,7 @@ export default function AdminSettings() {
       setShowFieldSetForm(false);
       const { data } = await api.get("/admin/field-sets");
       setFieldSets(data);
+      refreshFieldSets();
     } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
   };
 

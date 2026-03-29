@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { TenantProvider } from "@/lib/tenant";
 import { Toaster } from "@/components/ui/sonner";
 import Login from "@/pages/Login";
 import Onboarding from "@/pages/Onboarding";
@@ -29,6 +30,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <TenantProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/onboarding" element={<Onboarding />} />
@@ -47,6 +49,7 @@ function App() {
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>
+        </TenantProvider>
         <Toaster richColors position="top-right" />
       </AuthProvider>
     </BrowserRouter>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant";
 import { formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Edit, Archive, Plus, CheckCircle, Clock, XCircle, Target, Paperclip, Upload, Trash2, FileText, Lock } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, Edit, Archive, Plus, CheckCircle, Clock, XCircle, Target, Paperclip, Upload, Trash2, FileText, Lock, Save } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_COLORS = {
@@ -30,6 +32,7 @@ export default function ClientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { v, fieldSets } = useTenant();
   const [client, setClient] = useState(null);
   const [services, setServices] = useState([]);
   const [outcomes, setOutcomes] = useState([]);
@@ -42,6 +45,7 @@ export default function ClientDetail() {
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState({});
+  const [saving, setSaving] = useState(false);
   const [serviceForm, setServiceForm] = useState({ service_date: new Date().toISOString().split("T")[0], service_type: "", provider_name: "", notes: "" });
   const [outcomeForm, setOutcomeForm] = useState({ goal_description: "", target_date: "", status: "NOT_STARTED" });
   const [followUpForm, setFollowUpForm] = useState({ title: "", description: "", due_date: "", urgency: "NORMAL" });
@@ -62,9 +66,40 @@ export default function ClientDetail() {
     fetchAll();
   }, [id]);
 
-  const handleApprove = async () => { try { const { data } = await api.patch(`/clients/${id}`, { pending: false }); setClient(data); toast.success("Client approved"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } };
-  const handleArchive = async () => { try { await api.delete(`/clients/${id}`); toast.success("Client archived"); navigate("/clients"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } };
-  const handleEdit = async (e) => { e.preventDefault(); try { const { data } = await api.patch(`/clients/${id}`, { name: editData.name, email: editData.email, phone: editData.phone, address: editData.address, notes: editData.notes }); setClient(data); setShowEdit(false); toast.success("Client updated"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } };
+  const openEditDialog = () => {
+    setEditData({
+      name: client.name || "",
+      email: client.email || "",
+      phone: client.phone || "",
+      address: client.address || "",
+      notes: client.notes || "",
+      demographics: { ...(client.demographics || {}) },
+      custom_fields: { ...(client.custom_fields || {}) },
+    });
+    setShowEdit(true);
+  };
+
+  const handleEdit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const { data } = await api.patch(`/clients/${id}`, {
+        name: editData.name,
+        email: editData.email,
+        phone: editData.phone,
+        address: editData.address,
+        notes: editData.notes,
+        demographics: editData.demographics,
+        custom_fields: editData.custom_fields,
+      });
+      setClient(data);
+      setShowEdit(false);
+      toast.success(`${v("client")} updated`);
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    finally { setSaving(false); }
+  };
+  const handleApprove = async () => { try { const { data } = await api.patch(`/clients/${id}`, { pending: false }); setClient(data); toast.success(`${v("client")} approved`); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } };
+  const handleArchive = async () => { try { await api.delete(`/clients/${id}`); toast.success(`${v("client")} archived`); navigate("/clients"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } };
   const handleAddService = async (e) => { e.preventDefault(); try { const { data } = await api.post(`/clients/${id}/services`, serviceForm); setServices([data, ...services]); setShowServiceForm(false); setServiceForm({ service_date: new Date().toISOString().split("T")[0], service_type: "", provider_name: "", notes: "" }); toast.success("Service logged"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } };
   const handleAddOutcome = async (e) => { e.preventDefault(); try { const { data } = await api.post(`/clients/${id}/outcomes`, outcomeForm); setOutcomes([data, ...outcomes]); setShowOutcomeForm(false); setOutcomeForm({ goal_description: "", target_date: "", status: "NOT_STARTED" }); toast.success("Outcome created"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } };
   const handleAddFollowUp = async (e) => { e.preventDefault(); try { const { data } = await api.post(`/clients/${id}/follow-ups`, followUpForm); setFollowUps([data, ...followUps]); setShowFollowUpForm(false); setFollowUpForm({ title: "", description: "", due_date: "", urgency: "NORMAL" }); toast.success("Follow-up created"); } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); } };
@@ -82,7 +117,7 @@ export default function ClientDetail() {
         <Button variant="ghost" onClick={() => navigate("/clients")} className="text-[#6B7280] hover:text-[#1F2937] gap-2 rounded-lg" data-testid="back-to-clients"><ArrowLeft className="h-4 w-4" /> Clients</Button>
         <div className="flex items-center gap-2">
           {client.pending && role === "ADMIN" && <Button onClick={handleApprove} className="bg-[#10B981] hover:bg-[#059669] text-white gap-2 rounded-lg font-bold" data-testid="approve-client-btn"><CheckCircle className="h-4 w-4" /> Approve</Button>}
-          {(role === "ADMIN" || role === "CASE_WORKER") && <Button variant="outline" onClick={() => setShowEdit(true)} className="border-[#E5E7EB] text-[#6B7280] gap-2 rounded-lg" data-testid="edit-client-btn"><Edit className="h-4 w-4" /> Edit</Button>}
+          {(role === "ADMIN" || role === "CASE_WORKER") && <Button variant="outline" onClick={openEditDialog} className="border-[#E5E7EB] text-[#6B7280] gap-2 rounded-lg" data-testid="edit-client-btn"><Edit className="h-4 w-4" /> Edit</Button>}
           {role === "ADMIN" && <Button variant="outline" onClick={handleArchive} className="border-[#FECACA] text-[#EF4444] hover:bg-[#FEF2F2] gap-2 rounded-lg" data-testid="archive-client-btn"><Archive className="h-4 w-4" /> Archive</Button>}
         </div>
       </div>
@@ -102,6 +137,40 @@ export default function ClientDetail() {
               {client.address && <div><span className="text-[#9CA3AF]">Address:</span> <span className="text-[#6B7280]">{client.address}</span></div>}
             </div>
             {client.notes && <p className="text-sm text-[#9CA3AF] mt-3 border-t border-[#F3F4F6] pt-3">{client.notes}</p>}
+            {/* Demographics */}
+            {client.demographics && Object.keys(client.demographics).length > 0 && (
+              <div className="mt-3 border-t border-[#F3F4F6] pt-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-2">Demographics</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {Object.entries(client.demographics).filter(([, val]) => val).map(([key, val]) => (
+                    <div key={key} className="bg-[#FAFAF8] rounded-lg px-3 py-2">
+                      <span className="text-[10px] text-[#9CA3AF] block capitalize">{key.replace(/_/g, " ")}</span>
+                      <span className="text-xs font-semibold text-[#1F2937]">{String(val)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Custom Fields from Field Sets */}
+            {fieldSets.length > 0 && (
+              <div className="mt-3 border-t border-[#F3F4F6] pt-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-2">Custom Fields</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {fieldSets.map((fs) => fs.fields?.map((field) => {
+                    const fieldKey = field.name || field.label;
+                    const val = client.custom_fields?.[fieldKey];
+                    return (
+                      <div key={`${fs.id}-${fieldKey}`} className="bg-[#FAFAF8] rounded-lg px-3 py-2" data-testid={`custom-field-${fieldKey}`}>
+                        <span className="text-[10px] text-[#9CA3AF] block">{fieldKey}</span>
+                        <span className="text-xs font-semibold text-[#1F2937]">
+                          {field.type === "checkbox" ? (val ? "Yes" : "No") : (val || <span className="text-[#D1D5DB] font-normal italic">Not set</span>)}
+                        </span>
+                      </div>
+                    );
+                  }))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -187,7 +256,106 @@ export default function ClientDetail() {
       <Dialog open={showServiceForm} onOpenChange={setShowServiceForm}><DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] rounded-2xl" data-testid="service-dialog"><DialogHeader><DialogTitle className="font-['Nunito'] font-bold">Log Service</DialogTitle></DialogHeader><form onSubmit={handleAddService} className="space-y-4"><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Date *</Label><Input type="date" value={serviceForm.service_date} onChange={(e) => setServiceForm({...serviceForm, service_date: e.target.value})} required className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Type *</Label><Input value={serviceForm.service_type} onChange={(e) => setServiceForm({...serviceForm, service_type: e.target.value})} required placeholder="e.g., Counseling" className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Provider *</Label><Input value={serviceForm.provider_name} onChange={(e) => setServiceForm({...serviceForm, provider_name: e.target.value})} required className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Notes</Label><Textarea value={serviceForm.notes} onChange={(e) => setServiceForm({...serviceForm, notes: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><DialogFooter><Button type="button" variant="ghost" onClick={() => setShowServiceForm(false)} className="text-[#9CA3AF] rounded-lg">Cancel</Button><Button type="submit" className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold" data-testid="submit-service">Save</Button></DialogFooter></form></DialogContent></Dialog>
       <Dialog open={showOutcomeForm} onOpenChange={setShowOutcomeForm}><DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] rounded-2xl" data-testid="outcome-dialog"><DialogHeader><DialogTitle className="font-['Nunito'] font-bold">Add Outcome</DialogTitle></DialogHeader><form onSubmit={handleAddOutcome} className="space-y-4"><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Goal *</Label><Input value={outcomeForm.goal_description} onChange={(e) => setOutcomeForm({...outcomeForm, goal_description: e.target.value})} required className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Target Date *</Label><Input type="date" value={outcomeForm.target_date} onChange={(e) => setOutcomeForm({...outcomeForm, target_date: e.target.value})} required className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Status</Label><Select value={outcomeForm.status} onValueChange={(v) => setOutcomeForm({...outcomeForm, status: v})}><SelectTrigger className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg"><SelectValue /></SelectTrigger><SelectContent className="bg-white border-[#E8E8E8] rounded-xl"><SelectItem value="NOT_STARTED">Not Started</SelectItem><SelectItem value="IN_PROGRESS">In Progress</SelectItem><SelectItem value="ACHIEVED">Achieved</SelectItem><SelectItem value="NOT_ACHIEVED">Not Achieved</SelectItem></SelectContent></Select></div></div><DialogFooter><Button type="button" variant="ghost" onClick={() => setShowOutcomeForm(false)} className="text-[#9CA3AF] rounded-lg">Cancel</Button><Button type="submit" className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold" data-testid="submit-outcome">Save</Button></DialogFooter></form></DialogContent></Dialog>
       <Dialog open={showFollowUpForm} onOpenChange={setShowFollowUpForm}><DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] rounded-2xl" data-testid="followup-dialog"><DialogHeader><DialogTitle className="font-['Nunito'] font-bold">Add Follow-up</DialogTitle></DialogHeader><form onSubmit={handleAddFollowUp} className="space-y-4"><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Title *</Label><Input value={followUpForm.title} onChange={(e) => setFollowUpForm({...followUpForm, title: e.target.value})} required className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Description</Label><Textarea value={followUpForm.description} onChange={(e) => setFollowUpForm({...followUpForm, description: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Due Date</Label><Input type="date" value={followUpForm.due_date} onChange={(e) => setFollowUpForm({...followUpForm, due_date: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Urgency</Label><Select value={followUpForm.urgency} onValueChange={(v) => setFollowUpForm({...followUpForm, urgency: v})}><SelectTrigger className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg"><SelectValue /></SelectTrigger><SelectContent className="bg-white border-[#E8E8E8] rounded-xl"><SelectItem value="LOW">Low</SelectItem><SelectItem value="NORMAL">Normal</SelectItem><SelectItem value="HIGH">High</SelectItem><SelectItem value="URGENT">Urgent</SelectItem></SelectContent></Select></div></div><DialogFooter><Button type="button" variant="ghost" onClick={() => setShowFollowUpForm(false)} className="text-[#9CA3AF] rounded-lg">Cancel</Button><Button type="submit" className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold" data-testid="submit-followup">Save</Button></DialogFooter></form></DialogContent></Dialog>
-      <Dialog open={showEdit} onOpenChange={setShowEdit}><DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] max-w-lg rounded-2xl" data-testid="edit-client-dialog"><DialogHeader><DialogTitle className="font-['Nunito'] font-bold">Edit Client</DialogTitle></DialogHeader><form onSubmit={handleEdit} className="space-y-4"><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Name</Label><Input value={editData.name || ""} onChange={(e) => setEditData({...editData, name: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Email</Label><Input value={editData.email || ""} onChange={(e) => setEditData({...editData, email: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Phone</Label><Input value={editData.phone || ""} onChange={(e) => setEditData({...editData, phone: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Address</Label><Input value={editData.address || ""} onChange={(e) => setEditData({...editData, address: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><div className="space-y-2"><Label className="text-[#6B7280] text-xs uppercase font-bold">Notes</Label><Textarea value={editData.notes || ""} onChange={(e) => setEditData({...editData, notes: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" /></div><DialogFooter><Button type="button" variant="ghost" onClick={() => setShowEdit(false)} className="text-[#9CA3AF] rounded-lg">Cancel</Button><Button type="submit" className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold" data-testid="save-edit-btn">Save Changes</Button></DialogFooter></form></DialogContent></Dialog>
+      <Dialog open={showEdit} onOpenChange={setShowEdit}>
+        <DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl" data-testid="edit-client-dialog">
+          <DialogHeader><DialogTitle className="font-['Nunito'] font-bold text-lg">Edit {v("client")}</DialogTitle></DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-5">
+            {/* Basic Info */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">Basic Information</p>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-[#6B7280] text-xs uppercase font-bold">Full Name *</Label>
+                  <Input value={editData.name || ""} onChange={(e) => setEditData({...editData, name: e.target.value})} required className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid="edit-name" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[#6B7280] text-xs uppercase font-bold">Email</Label>
+                    <Input type="email" value={editData.email || ""} onChange={(e) => setEditData({...editData, email: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid="edit-email" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[#6B7280] text-xs uppercase font-bold">Phone</Label>
+                    <Input value={editData.phone || ""} onChange={(e) => setEditData({...editData, phone: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid="edit-phone" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[#6B7280] text-xs uppercase font-bold">Address</Label>
+                  <Input value={editData.address || ""} onChange={(e) => setEditData({...editData, address: e.target.value})} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid="edit-address" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[#6B7280] text-xs uppercase font-bold">Notes</Label>
+                  <Textarea value={editData.notes || ""} onChange={(e) => setEditData({...editData, notes: e.target.value})} rows={3} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg" data-testid="edit-notes" />
+                </div>
+              </div>
+            </div>
+
+            {/* Demographics */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">Demographics</p>
+              <div className="grid grid-cols-2 gap-3">
+                {["age_group", "gender", "ethnicity", "language", "income_level", "education"].map((key) => (
+                  <div key={key} className="space-y-1">
+                    <Label className="text-[#6B7280] text-[10px] uppercase font-bold capitalize">{key.replace(/_/g, " ")}</Label>
+                    <Input value={editData.demographics?.[key] || ""} onChange={(e) => setEditData({...editData, demographics: {...(editData.demographics || {}), [key]: e.target.value}})}
+                      placeholder={`Enter ${key.replace(/_/g, " ")}`} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg h-9 text-sm" data-testid={`edit-demo-${key}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Fields from Field Sets */}
+            {fieldSets.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">Custom Fields</p>
+                {fieldSets.map((fs) => (
+                  <div key={fs.id} className="mb-3">
+                    <p className="text-xs font-semibold text-[#4B5563] mb-2">{fs.name}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {fs.fields?.map((field) => {
+                        const fieldKey = field.name || field.label;
+                        return (
+                        <div key={fieldKey} className="space-y-1">
+                          <Label className="text-[#6B7280] text-[10px] uppercase font-bold">
+                            {fieldKey} {field.required && <span className="text-[#EF4444]">*</span>}
+                          </Label>
+                          {field.type === "checkbox" ? (
+                            <div className="flex items-center gap-2 h-9">
+                              <Checkbox checked={!!editData.custom_fields?.[fieldKey]}
+                                onCheckedChange={(v) => setEditData({...editData, custom_fields: {...(editData.custom_fields || {}), [fieldKey]: !!v}})}
+                                data-testid={`edit-cf-${fieldKey}`} />
+                              <span className="text-sm text-[#6B7280]">{editData.custom_fields?.[fieldKey] ? "Yes" : "No"}</span>
+                            </div>
+                          ) : field.type === "select" ? (
+                            <Select value={editData.custom_fields?.[fieldKey] || ""} onValueChange={(val) => setEditData({...editData, custom_fields: {...(editData.custom_fields || {}), [fieldKey]: val}})}>
+                              <SelectTrigger className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg h-9 text-sm" data-testid={`edit-cf-${fieldKey}`}><SelectValue placeholder="Select..." /></SelectTrigger>
+                              <SelectContent className="bg-white border-[#E8E8E8] rounded-xl">
+                                {(field.options || []).map((opt) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input type={field.type === "number" || field.type === "NUMBER" ? "number" : field.type === "date" || field.type === "DATE" ? "date" : "text"}
+                              value={editData.custom_fields?.[fieldKey] || ""}
+                              onChange={(e) => setEditData({...editData, custom_fields: {...(editData.custom_fields || {}), [fieldKey]: e.target.value}})}
+                              required={field.required} className="bg-[#FAFAF8] border-[#E5E7EB] rounded-lg h-9 text-sm" data-testid={`edit-cf-${fieldKey}`} />
+                          )}
+                        </div>
+                      );})}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setShowEdit(false)} className="text-[#9CA3AF] rounded-lg">Cancel</Button>
+              <Button type="submit" disabled={saving} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold gap-2" data-testid="save-edit-btn">
+                {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="h-4 w-4" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

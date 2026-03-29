@@ -108,7 +108,14 @@ async def get_client(client_id: str, request: Request):
 @router.patch("/clients/{client_id}")
 async def update_client(client_id: str, data: ClientUpdate, request: Request):
     user = await require_role(request, ["ADMIN", "CASE_WORKER"])
-    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    update_data = {}
+    for k, val in data.model_dump().items():
+        if val is not None:
+            update_data[k] = val
+        elif k in ("demographics", "custom_fields"):
+            # Allow saving empty dicts to clear these fields
+            if val is not None:
+                update_data[k] = val
     update_data["updated_by"] = user["id"]
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = await db.clients.update_one({"_id": ObjectId(client_id), "tenant_id": user.get("tenant_id")}, {"$set": update_data})
