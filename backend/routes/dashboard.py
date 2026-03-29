@@ -1,0 +1,83 @@
+from fastapi import APIRouter, Request, HTTPException
+from bson import ObjectId
+from datetime import datetime, timezone, timedelta
+from collections import defaultdict
+
+from config import db
+from helpers import get_current_user, serialize_doc
+
+router = APIRouter()
+
+@router.get("/dashboard/stats")
+async def dashboard_stats(request: Request):
+    user = await get_current_user(request)
+    tid = user.get("tenant_id")
+    clients = await db.clients.count_documents({"tenant_id": tid, "is_archived": {"$ne": True}})
+    services = await db.service_logs.count_documents({"tenant_id": tid})
+    visits = await db.visits.count_documents({"tenant_id": tid})
+    outcomes = await db.outcomes.count_documents({"tenant_id": tid})
+    pending = await db.clients.count_documents({"tenant_id": tid, "pending": True})
+    unread_notifs = await db.notifications.count_documents({"tenant_id": tid, "user_id": user["id"], "is_read": False})
+    return {"client_count": clients, "service_count": services, "visit_count": visits,
+            "outcome_count": outcomes, "pending_count": pending, "unread_notifications": unread_notifs}
+
+@router.get("/dashboard/trends")
+async def dashboard_trends(request: Request, range: str = "month"):
+    user = await get_current_user(request)
+    tid = user.get("tenant_id")
+    now = datetime.now(timezone.utc)
+    if range == "week":
+        start = now - timedelta(days=7)
+    elif range == "quarter":
+        start = now - timedelta(days=90)
+    elif range == "year":
+        start = now - timedelta(days=365)
+    else:
+        start = now - timedelta(days=30)
+    start_str = start.isoformat()
+    services = await db.service_logs.find({"tenant_id": tid, "created_at": {"$gte": start_str}}).to_list(1000)
+    visits = await db.visits.find({"tenant_id": tid, "created_at": {"$gte": start_str}}).to_list(1000)
+    service_by_date = defaultdict(int)
+    visit_by_date = defaultdict(int)
+    for s in services:
+        d = s.get("service_date", s.get("created_at", ""))[:10]
+        service_by_date[d] += 1
+    for v in visits:
+        d = v.get("date", v.get("created_at", ""))[:10]
+        visit_by_date[d] += 1
+    all_dates = sorted(set(list(service_by_date.keys()) + list(visit_by_date.keys())))
+    return [{"date": d, "service_count": service_by_date.get(d, 0), "visit_count": visit_by_date.get(d, 0)} for d in all_dates]
+
+@router.get("/dashboard/outcomes")
+async def dashboard_outcomes(request: Request):
+    user = await get_current_user(request)
+    tid = user.get("tenant_id")
+    pipeline = [
+        {"$match": {"tenant_id": tid}},
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+    ]
+    results = await db.outcomes.aggregate(pipeline).to_list(10)
+    return [{"status": r["_id"], "count": r["count"]} for r in results]
+
+@router.get("/dashboard/activity")
+async def dashboard_activity(request: Request):
+    user = await get_current_user(request)
+    tid = user.get("tenant_id")
+    # Recent clients
+    recent_clients = await db.clients.find({"tenant_id": tid, "is_archived": {"$ne": True}}).sort("created_at", -1).limit(5).to_list(5)
+    # Upcoming visits
+    now = datetime.now(timezone.utc).isoformat()
+    upcoming_visits = await db.visits.find({"tenant_id": tid, "date": {"$gte": now}, "status": "SCHEDULED"}).sort("date", 1).limit(5).to_list(5)
+    for v in upcoming_visits:
+        client = await db.clients.find_one({"_id": ObjectId(v.get("client_id", ""))}, {"name": 1})
+        v["client_name"] = client["name"] if client else "Unknown"
+    # Pending approvals
+    pending_clients = await db.clients.find({"tenant_id": tid, "pending": True}).sort("created_at", -1).limit(5).to_list(5)
+    # Overdue payment requests
+    overdue_payments = await db.payment_requests.find({"tenant_id": tid, "status": "OVERDUE"}).sort("created_at", -1).limit(5).to_list(5)
+    return {
+        "recent_clients": [serialize_doc(c) for c in recent_clients],
+        "upcoming_visits": [serialize_doc(v) for v in upcoming_visits],
+        "pending_approvals": [serialize_doc(p) for p in pending_clients],
+        "overdue_payments": [serialize_doc(o) for o in overdue_payments],
+    }

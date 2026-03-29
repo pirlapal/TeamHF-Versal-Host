@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 import AICopilot from "@/components/AICopilot";
+import NotificationBell from "@/components/NotificationBell";
 import { Menu, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -23,6 +24,7 @@ export default function Layout() {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex-1" />
+          <NotificationBell />
           <Button
             variant="ghost"
             size="sm"

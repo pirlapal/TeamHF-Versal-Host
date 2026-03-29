@@ -1,0 +1,201 @@
+from fastapi import APIRouter, Request, UploadFile, File, HTTPException
+from bson import ObjectId
+from datetime import datetime, timezone
+from typing import Optional
+import csv
+import io
+
+from config import db
+from helpers import get_current_user, require_role, serialize_doc, create_notification
+from models.clients import ClientCreate, ClientUpdate, ClientWizardCreate
+
+router = APIRouter()
+
+@router.get("/clients")
+async def list_clients(request: Request, search: str = "", pending: Optional[bool] = None, page: int = 1, page_size: int = 25):
+    user = await get_current_user(request)
+    tenant_id = user.get("tenant_id")
+    query = {"tenant_id": tenant_id, "is_archived": {"$ne": True}}
+    if pending is not None:
+        query["pending"] = pending
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}},
+        ]
+    total = await db.clients.count_documents(query)
+    skip = (page - 1) * page_size
+    clients = await db.clients.find(query).sort("created_at", -1).skip(skip).limit(page_size).to_list(page_size)
+    return {
+        "data": [serialize_doc(c) for c in clients],
+        "pagination": {"page": page, "page_size": page_size, "total_count": total, "total_pages": max(1, (total + page_size - 1) // page_size)}
+    }
+
+@router.post("/clients", status_code=201)
+async def create_client(data: ClientCreate, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    client_doc = {
+        "name": data.name,
+        "email": data.email,
+        "phone": data.phone,
+        "address": data.address,
+        "demographics": data.demographics or {},
+        "custom_fields": data.custom_fields or {},
+        "notes": data.notes or "",
+        "pending": user.get("role") != "ADMIN",
+        "is_archived": False,
+        "tenant_id": user.get("tenant_id"),
+        "created_by": user["id"],
+        "updated_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    result = await db.clients.insert_one(client_doc)
+    client_doc["id"] = str(result.inserted_id)
+    del client_doc["_id"]
+    # Notify admins
+    admins = await db.users.find({"tenant_id": user.get("tenant_id"), "role": "ADMIN"}).to_list(20)
+    for admin in admins:
+        if str(admin["_id"]) != user["id"]:
+            await create_notification(user.get("tenant_id"), str(admin["_id"]), "client_created",
+                f"New client: {data.name}", f"{user.get('name')} added a new client", f"/clients/{client_doc['id']}")
+    return client_doc
+
+@router.get("/clients/{client_id}")
+async def get_client(client_id: str, request: Request):
+    user = await get_current_user(request)
+    try:
+        client = await db.clients.find_one({"_id": ObjectId(client_id), "tenant_id": user.get("tenant_id")})
+    except Exception:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return serialize_doc(client)
+
+@router.patch("/clients/{client_id}")
+async def update_client(client_id: str, data: ClientUpdate, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    update_data["updated_by"] = user["id"]
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.clients.update_one({"_id": ObjectId(client_id), "tenant_id": user.get("tenant_id")}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Client not found")
+    client = await db.clients.find_one({"_id": ObjectId(client_id)})
+    return serialize_doc(client)
+
+@router.delete("/clients/{client_id}")
+async def archive_client(client_id: str, request: Request):
+    user = await require_role(request, ["ADMIN"])
+    result = await db.clients.update_one(
+        {"_id": ObjectId(client_id), "tenant_id": user.get("tenant_id")},
+        {"$set": {"is_archived": True, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return {"message": "Client archived"}
+
+# ── Client Onboarding Wizard ──
+@router.post("/clients/wizard", status_code=201)
+async def create_client_wizard(data: ClientWizardCreate, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    tid = user.get("tenant_id")
+    now = datetime.now(timezone.utc)
+    p = data.personal
+    name = p.get("first_name", "")
+    if p.get("last_name"):
+        name = f"{name} {p['last_name']}"
+    client_doc = {
+        "name": name.strip(),
+        "email": p.get("email"),
+        "phone": p.get("phone"),
+        "address": p.get("address"),
+        "emergency_contact": p.get("emergency_contact"),
+        "demographics": data.demographics or {},
+        "custom_fields": {},
+        "notes": p.get("notes", ""),
+        "pending": user.get("role") != "ADMIN",
+        "is_archived": False,
+        "tenant_id": tid,
+        "created_by": user["id"],
+        "updated_by": user["id"],
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+        "onboarded_via": "wizard",
+    }
+    result = await db.clients.insert_one(client_doc)
+    cid = str(result.inserted_id)
+    if data.services:
+        svc_types = data.services.get("service_types", [])
+        for svc in svc_types:
+            await db.service_logs.insert_one({
+                "client_id": cid, "tenant_id": tid,
+                "service_date": now.strftime("%Y-%m-%d"),
+                "service_type": svc,
+                "provider_name": data.services.get("assigned_worker", user.get("name", "")),
+                "notes": f"Initial service assigned during onboarding. Priority: {data.services.get('priority', 'NORMAL')}",
+                "created_by": user["id"],
+                "created_at": now.isoformat(),
+            })
+    if data.visit and data.visit.get("date"):
+        await db.visits.insert_one({
+            "client_id": cid, "tenant_id": tid,
+            "date": data.visit["date"],
+            "duration": data.visit.get("duration", 60),
+            "notes": data.visit.get("notes", "Initial onboarding visit"),
+            "status": "SCHEDULED",
+            "location": data.visit.get("location", ""),
+            "case_worker_id": user["id"],
+            "case_worker_name": user.get("name", ""),
+            "created_at": now.isoformat(),
+        })
+    client_doc["id"] = cid
+    client_doc.pop("_id", None)
+    # Notify
+    admins = await db.users.find({"tenant_id": tid, "role": "ADMIN"}).to_list(20)
+    for admin in admins:
+        if str(admin["_id"]) != user["id"]:
+            await create_notification(tid, str(admin["_id"]), "client_onboarded",
+                f"Client onboarded: {name.strip()}", f"{user.get('name')} onboarded a new client via wizard", f"/clients/{cid}")
+    return {"client": client_doc, "message": f"Client {name.strip()} onboarded successfully"}
+
+# ── CSV Import ──
+@router.post("/clients/import")
+async def import_clients_csv(request: Request, file: UploadFile = File(...)):
+    user = await require_role(request, ["ADMIN"])
+    tid = user.get("tenant_id")
+    data = await file.read()
+    text = data.decode("utf-8")
+    reader = csv.DictReader(io.StringIO(text))
+    imported = 0
+    skipped = 0
+    errors = []
+    for row_num, row in enumerate(reader, start=2):
+        name = row.get("name", "").strip()
+        if not name:
+            skipped += 1
+            errors.append(f"Row {row_num}: Missing name")
+            continue
+        client_doc = {
+            "name": name,
+            "email": row.get("email", "").strip() or None,
+            "phone": row.get("phone", "").strip() or None,
+            "address": row.get("address", "").strip() or None,
+            "demographics": {},
+            "custom_fields": {},
+            "notes": row.get("notes", "").strip() or "",
+            "pending": False,
+            "is_archived": False,
+            "tenant_id": tid,
+            "created_by": user["id"],
+            "updated_by": user["id"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            await db.clients.insert_one(client_doc)
+            imported += 1
+        except Exception as e:
+            skipped += 1
+            errors.append(f"Row {row_num}: {str(e)[:50]}")
+    return {"imported": imported, "skipped": skipped, "errors": errors[:20]}
