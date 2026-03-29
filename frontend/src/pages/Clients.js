@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, ChevronLeft, ChevronRight, UserCheck, Clock, Upload, Download, Users } from "lucide-react";
+import { Search, Plus, ChevronLeft, ChevronRight, UserCheck, Clock, Upload, Download, Users, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatApiError } from "@/lib/api";
 
@@ -103,6 +103,9 @@ export default function Clients() {
             )}
             <Button onClick={() => setShowCreate(true)} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] hover:from-[#EA580C] hover:to-[#F97316] text-white gap-2 rounded-lg font-bold shadow-md shadow-orange-200" data-testid="add-client-btn">
               <Plus className="h-4 w-4" /> Add Client
+            </Button>
+            <Button onClick={() => navigate("/clients/wizard")} variant="outline" className="border-[#14B8A6] text-[#14B8A6] hover:bg-[#F0FDFA] gap-2 rounded-lg font-bold" data-testid="wizard-client-btn">
+              <Wand2 className="h-4 w-4" /> Onboard Wizard
             </Button>
           </div>
         )}

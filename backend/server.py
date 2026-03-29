@@ -273,6 +273,19 @@ class ShareableLinkCreate(BaseModel):
     role: str = "CASE_WORKER"
     message: Optional[str] = None
 
+class ClientWizardCreate(BaseModel):
+    personal: Dict[str, Any]
+    demographics: Optional[Dict[str, Any]] = None
+    services: Optional[Dict[str, Any]] = None
+    visit: Optional[Dict[str, Any]] = None
+
+class PaymentRequestCreate(BaseModel):
+    client_name: str
+    client_email: str
+    amount: float
+    description: str
+    due_date: Optional[str] = None
+
 # ── Auth Endpoints ──
 @api_router.post("/auth/login")
 async def login(data: AuthLogin, response: Response):
@@ -1202,9 +1215,45 @@ async def seed_demo_data(request: Request):
                 "case_worker_name": user.get("name", "Admin"),
                 "created_at": now.isoformat(),
             })
+    # Seed mock payment data
+    payment_count = 0
+    for _ in range(random.randint(4, 8)):
+        payer = random.choice(MOCK_PAYMENT_CLIENTS)
+        status = random.choice(["PENDING", "PAID", "OVERDUE", "CANCELLED"])
+        amount = round(random.uniform(15, 200), 2)
+        created_days_ago = random.randint(1, 60)
+        await db.payment_requests.insert_one({
+            "tenant_id": tid,
+            "client_name": payer[0],
+            "client_email": payer[1],
+            "amount": amount,
+            "currency": "usd",
+            "description": random.choice(MOCK_PAYMENT_DESCRIPTIONS),
+            "due_date": (now + timedelta(days=random.randint(7, 45))).strftime("%Y-%m-%d"),
+            "status": status,
+            "created_by": user["id"],
+            "created_by_name": user.get("name", "Admin"),
+            "created_at": (now - timedelta(days=created_days_ago)).isoformat(),
+        })
+        payment_count += 1
+    # Seed mock subscription payments
+    for _ in range(random.randint(2, 5)):
+        pkg = random.choice(["basic", "standard", "premium"])
+        amounts = {"basic": 10.00, "standard": 25.00, "premium": 50.00}
+        await db.payment_transactions.insert_one({
+            "session_id": f"mock_cs_{uuid.uuid4().hex[:16]}",
+            "user_id": user["id"],
+            "tenant_id": tid,
+            "amount": amounts[pkg],
+            "currency": "usd",
+            "package_id": pkg,
+            "payment_status": random.choice(["paid", "paid", "paid", "INITIATED"]),
+            "created_at": (now - timedelta(days=random.randint(1, 90))).isoformat(),
+        })
     return {
-        "message": f"Demo data created: {len(created_clients)} clients with services, outcomes, and visits. Demo users also created.",
+        "message": f"Demo data created: {len(created_clients)} clients with services, outcomes, visits, and {payment_count} payment requests. Demo users also created.",
         "client_count": len(created_clients),
+        "payment_request_count": payment_count,
         "demo_users": [
             {"email": demo_worker_email, "password": demo_worker_password, "role": "CASE_WORKER", "name": "Sarah Thompson"},
             {"email": demo_vol_email, "password": demo_vol_password, "role": "VOLUNTEER", "name": "Alex Rivera"},
@@ -1340,6 +1389,149 @@ async def ai_generate_form(data: AIGenerateForm, request: Request):
             pass
     return {"template": template, "prefill": prefill}
 
+# ── Client Onboarding Wizard ──
+@api_router.post("/clients/wizard", status_code=201)
+async def create_client_wizard(data: ClientWizardCreate, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    tid = user.get("tenant_id")
+    now = datetime.now(timezone.utc)
+    p = data.personal
+    name = p.get("first_name", "")
+    if p.get("last_name"):
+        name = f"{name} {p['last_name']}"
+    client_doc = {
+        "name": name.strip(),
+        "email": p.get("email"),
+        "phone": p.get("phone"),
+        "address": p.get("address"),
+        "emergency_contact": p.get("emergency_contact"),
+        "demographics": data.demographics or {},
+        "custom_fields": {},
+        "notes": p.get("notes", ""),
+        "pending": user.get("role") != "ADMIN",
+        "is_archived": False,
+        "tenant_id": tid,
+        "created_by": user["id"],
+        "updated_by": user["id"],
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+        "onboarded_via": "wizard",
+    }
+    result = await db.clients.insert_one(client_doc)
+    cid = str(result.inserted_id)
+    # Initial services
+    if data.services:
+        svc_types = data.services.get("service_types", [])
+        for svc in svc_types:
+            await db.service_logs.insert_one({
+                "client_id": cid, "tenant_id": tid,
+                "service_date": now.strftime("%Y-%m-%d"),
+                "service_type": svc,
+                "provider_name": data.services.get("assigned_worker", user.get("name", "")),
+                "notes": f"Initial service assigned during onboarding. Priority: {data.services.get('priority', 'NORMAL')}",
+                "created_by": user["id"],
+                "created_at": now.isoformat(),
+            })
+    # First visit
+    if data.visit and data.visit.get("date"):
+        await db.visits.insert_one({
+            "client_id": cid, "tenant_id": tid,
+            "date": data.visit["date"],
+            "duration": data.visit.get("duration", 60),
+            "notes": data.visit.get("notes", "Initial onboarding visit"),
+            "status": "SCHEDULED",
+            "location": data.visit.get("location", ""),
+            "case_worker_id": user["id"],
+            "case_worker_name": user.get("name", ""),
+            "created_at": now.isoformat(),
+        })
+    client_doc["id"] = cid
+    client_doc.pop("_id", None)
+    return {"client": client_doc, "message": f"Client {name.strip()} onboarded successfully"}
+
+# ── Clear Demo Data ──
+@api_router.post("/demo/clear")
+async def clear_demo_data(request: Request):
+    user = await require_role(request, ["ADMIN"])
+    tid = user.get("tenant_id")
+    deleted = {}
+    deleted["clients"] = (await db.clients.delete_many({"tenant_id": tid})).deleted_count
+    deleted["services"] = (await db.service_logs.delete_many({"tenant_id": tid})).deleted_count
+    deleted["visits"] = (await db.visits.delete_many({"tenant_id": tid})).deleted_count
+    deleted["outcomes"] = (await db.outcomes.delete_many({"tenant_id": tid})).deleted_count
+    deleted["follow_ups"] = (await db.follow_ups.delete_many({"tenant_id": tid})).deleted_count
+    deleted["attachments"] = (await db.attachments.delete_many({"tenant_id": tid})).deleted_count
+    deleted["payment_requests"] = (await db.payment_requests.delete_many({"tenant_id": tid})).deleted_count
+    deleted["payment_transactions"] = (await db.payment_transactions.delete_many({"tenant_id": tid})).deleted_count
+    # Remove demo users (keep current admin)
+    deleted["demo_users"] = (await db.users.delete_many({
+        "tenant_id": tid,
+        "email": {"$in": ["caseworker@demo.caseflow.io", "volunteer@demo.caseflow.io"]}
+    })).deleted_count
+    total = sum(deleted.values())
+    return {"message": f"Cleared {total} records from your organization", "details": deleted}
+
+# ── Payment Requests ──
+@api_router.post("/payments/request")
+async def create_payment_request(data: PaymentRequestCreate, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    tid = user.get("tenant_id")
+    now = datetime.now(timezone.utc)
+    req_doc = {
+        "tenant_id": tid,
+        "client_name": data.client_name,
+        "client_email": data.client_email,
+        "amount": data.amount,
+        "currency": "usd",
+        "description": data.description,
+        "due_date": data.due_date,
+        "status": "PENDING",
+        "created_by": user["id"],
+        "created_by_name": user.get("name", ""),
+        "created_at": now.isoformat(),
+    }
+    result = await db.payment_requests.insert_one(req_doc)
+    req_doc["id"] = str(result.inserted_id)
+    req_doc.pop("_id", None)
+    return req_doc
+
+@api_router.get("/payments/requests")
+async def list_payment_requests(request: Request):
+    user = await get_current_user(request)
+    tid = user.get("tenant_id")
+    reqs = await db.payment_requests.find({"tenant_id": tid}).sort("created_at", -1).to_list(100)
+    return [serialize_doc(r) for r in reqs]
+
+@api_router.patch("/payments/requests/{request_id}")
+async def update_payment_request(request_id: str, request: Request):
+    user = await require_role(request, ["ADMIN"])
+    body = await request.json()
+    update_data = {}
+    if "status" in body:
+        update_data["status"] = body["status"]
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No update data")
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.payment_requests.update_one(
+        {"_id": ObjectId(request_id), "tenant_id": user.get("tenant_id")},
+        {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Payment request not found")
+    return {"message": "Payment request updated"}
+
+# ── Seed Mock Payment Data ──
+MOCK_PAYMENT_CLIENTS = [
+    ("Maria Garcia", "maria.garcia@example.com"),
+    ("James Wilson", "james.wilson@example.com"),
+    ("Aisha Johnson", "aisha.johnson@example.com"),
+    ("Robert Chen", "robert.chen@example.com"),
+]
+MOCK_PAYMENT_DESCRIPTIONS = [
+    "Program enrollment fee", "Workshop materials", "Transportation assistance",
+    "Childcare co-pay", "Skills training fee", "Event registration",
+]
+
 # ── Health Check ──
 @api_router.get("/health")
 async def health():
@@ -1372,6 +1564,7 @@ async def startup():
     await db.outcomes.create_index([("tenant_id", 1), ("client_id", 1)])
     await db.payment_transactions.create_index("session_id")
     await db.attachments.create_index([("tenant_id", 1), ("client_id", 1)])
+    await db.payment_requests.create_index([("tenant_id", 1), ("status", 1)])
     # Init storage
     try:
         init_storage()

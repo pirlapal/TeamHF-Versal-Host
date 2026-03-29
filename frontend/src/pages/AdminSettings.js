@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserPlus, Save, Database, Link, Copy, CheckCircle, KeyRound } from "lucide-react";
+import { UserPlus, Save, Database, Link, Copy, CheckCircle, KeyRound, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminSettings() {
@@ -22,6 +22,7 @@ export default function AdminSettings() {
   const [inviteForm, setInviteForm] = useState({ email: "", role: "CASE_WORKER" });
   const [inviting, setInviting] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [shareableLink, setShareableLink] = useState(null);
   const [copied, setCopied] = useState(false);
   const [demoUsers, setDemoUsers] = useState([]);
@@ -69,6 +70,17 @@ export default function AdminSettings() {
       if (data.demo_users) setDemoUsers(data.demo_users);
     } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
     finally { setSeeding(false); }
+  };
+
+  const handleClearData = async () => {
+    if (!window.confirm("Are you sure? This will delete ALL clients, services, visits, outcomes, payment records, and demo users for your organization. This cannot be undone.")) return;
+    setClearing(true);
+    try {
+      const { data } = await api.post("/demo/clear");
+      toast.success(data.message);
+      setDemoUsers([]);
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    finally { setClearing(false); }
   };
 
   const handleRoleChange = async (userId, role) => {
@@ -192,6 +204,9 @@ export default function AdminSettings() {
             </div>
             <Button onClick={handleSeedDemo} disabled={seeding} className="bg-gradient-to-r from-[#14B8A6] to-[#2DD4BF] hover:from-[#0D9488] hover:to-[#14B8A6] text-white gap-2 rounded-lg font-bold shadow-md shadow-teal-200" data-testid="seed-demo-btn">
               {seeding ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Generating...</> : <><Database className="h-4 w-4" /> Load Demo Data</>}
+            </Button>
+            <Button onClick={handleClearData} disabled={clearing} variant="outline" className="border-[#FECACA] text-[#EF4444] hover:bg-[#FEF2F2] gap-2 rounded-lg font-bold" data-testid="clear-demo-btn">
+              {clearing ? <><div className="w-4 h-4 border-2 border-[#EF4444]/30 border-t-[#EF4444] rounded-full animate-spin" /> Clearing...</> : <><Trash2 className="h-4 w-4" /> Clear All Data</>}
             </Button>
 
             {/* Demo Credentials */}

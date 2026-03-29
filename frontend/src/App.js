@@ -12,6 +12,7 @@ import ClientDetail from "@/pages/ClientDetail";
 import CalendarPage from "@/pages/Calendar";
 import AdminSettings from "@/pages/AdminSettings";
 import Payments from "@/pages/Payments";
+import ClientWizard from "@/pages/ClientWizard";
 import Layout from "@/components/Layout";
 
 function ProtectedRoute({ children, roles }) {
@@ -43,6 +44,7 @@ function AppRoutes() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="clients" element={<Clients />} />
+        <Route path="clients/wizard" element={<ProtectedRoute roles={["ADMIN", "CASE_WORKER"]}><ClientWizard /></ProtectedRoute>} />
         <Route path="clients/:id" element={<ClientDetail />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="payments" element={<Payments />} />
