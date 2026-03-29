@@ -117,7 +117,7 @@ async def startup():
     # Use /tmp directory on cloud platforms like Render (read-only filesystem)
     memory_dir = os.environ.get("MEMORY_DIR", "/tmp/memory")
     os.makedirs(memory_dir, exist_ok=True)
-    with open("/app/memory/test_credentials.md", "w") as f:
+    with open(f"{memory_dir}/test_credentials.md", "w") as f:
         f.write(f"# Test Credentials\n\n## Admin\n- Email: {admin_email}\n- Password: {admin_password}\n- Role: ADMIN\n\n## Demo Case Worker\n- Email: caseworker@demo.caseflow.io\n- Password: demo1234\n- Role: CASE_WORKER\n- Name: Sarah Thompson\n\n## Demo Volunteer\n- Email: volunteer@demo.caseflow.io\n- Password: demo1234\n- Role: VOLUNTEER\n- Name: Alex Rivera\n")
 
 @app.on_event("shutdown")
