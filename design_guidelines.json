@@ -1,0 +1,113 @@
+{
+  "theme": "dark",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "emotional_tone": "Technical, authoritative, clear, futuristic, and highly functional",
+  "design_philosophy": "A 'Control Room' for nonprofits. Data is heavy but handled with Brutalist clarity. Grids are exposed, color is used exclusively for function and data visualization. The futuristic feel comes from the stark contrast, crisp borders, and technical typography—not cheesy neon.",
+  "colors": {
+    "background": "#0A0A0B",
+    "surface": "#141415",
+    "surface_glass": "rgba(10, 10, 11, 0.7)",
+    "border": "#2A2A2D",
+    "border_hover": "#3F3F43",
+    "text_primary": "#F9F9FB",
+    "text_secondary": "#A0A0A5",
+    "text_muted": "#6E6E73",
+    "primary": "#0055FF",
+    "primary_hover": "#0044CC",
+    "primary_foreground": "#FFFFFF",
+    "accent_ai": "#00E5FF",
+    "accent_ai_glow": "rgba(0, 229, 255, 0.2)",
+    "success": "#00E676",
+    "warning": "#FFEA00",
+    "error": "#FF1744"
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Outfit, sans-serif",
+      "body": "IBM Plex Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-medium tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-medium tracking-tight",
+      "h3": "text-xl sm:text-2xl font-medium tracking-tight",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base leading-relaxed text-[#A0A0A5]",
+      "small": "text-sm text-[#A0A0A5]",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em] text-[#6E6E73]",
+      "data_metric": "font-mono text-3xl font-semibold tracking-tighter text-[#F9F9FB]"
+    }
+  },
+  "layout_and_spacing": {
+    "grid_system": "The 'Control Room' Grid",
+    "container_padding": "p-6 md:p-8",
+    "card_padding": "p-6",
+    "gap_strategy": "gap-4 md:gap-6",
+    "border_radius": "rounded-none md:rounded-sm",
+    "alignment": "Strict left-alignment for all data, labels, and dense content. Optical alignment over geometric."
+  },
+  "surface_strategies": {
+    "cards": "Flat background (#141415), 1px solid border (#2A2A2D), no shadow. On hover: border-white/20.",
+    "sidebar": "Flat background, border-r border-[#2A2A2D]. Strict hierarchical lists.",
+    "ai_copilot_panel": "Glassmorphism: backdrop-blur-xl bg-black/60 border-l border-white/10. Optional 'Tracing Beam' effect on the edge.",
+    "header": "Solid background with a hard bottom border (#2A2A2D), sticky top z-50.",
+    "buttons": "Primary: sharp edges (rounded-sm), solid #0055FF, hover:bg-[#0044CC]. Secondary: bg-transparent border border-[#2A2A2D] hover:bg-white/5."
+  },
+  "components": {
+    "charts": "Use Recharts or Shadcn Charts. Tooltips must have dark glassmorphism backgrounds. Colors: Signal Blue, Electric Cyan, Emerald.",
+    "tables": "Dense. 1px borders. Mono font for numeric data. Hover state on rows: bg-white/5.",
+    "forms": "Shadcn Form/Input. Background #0A0A0B, border #2A2A2D. Focus state: ring-2 ring-[#0055FF] border-transparent.",
+    "ai_chat": "Bubbles: User (bg-[#2A2A2D] text-white), AI (bg-transparent border border-[#00E5FF]/30 text-[#00E5FF] font-mono for technical outputs)."
+  },
+  "motion_and_interaction": {
+    "hover_states": "All interactive elements must change background or border color. Transition: all 0.2s ease.",
+    "focus_states": "ring-2 ring-primary ring-offset-2 ring-offset-[#0A0A0B] outline-none.",
+    "page_transitions": "Subtle opacity fade in (framer-motion opacity 0 to 1, y: 10 to 0, duration 0.3s).",
+    "staggered_lists": "Data tables and list items should stagger in on load."
+  },
+  "media": {
+    "logos": [
+      {
+        "category": "brand_logo",
+        "url": "https://images.pexels.com/photos/26576975/pexels-photo-26576975.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Minimalist geometric brand logo placeholder."
+      }
+    ],
+    "avatars": [
+      {
+        "category": "user_avatar_1",
+        "url": "https://images.pexels.com/photos/3894379/pexels-photo-3894379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Smiling businesswoman."
+      },
+      {
+        "category": "user_avatar_2",
+        "url": "https://images.pexels.com/photos/5999897/pexels-photo-5999897.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Cheerful Muslim woman."
+      },
+      {
+        "category": "user_avatar_3",
+        "url": "https://images.unsplash.com/photo-1589220286904-3dcef62c68ee?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwxfHxkaXZlcnNlJTIwcHJvZmVzc2lvbmFsJTIwaGVhZHNob3QlMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzQ3NDk2MTV8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Woman in black crew neck."
+      }
+    ],
+    "backgrounds": [
+      {
+        "category": "login_background",
+        "url": "https://images.pexels.com/photos/3612932/pexels-photo-3612932.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Futuristic abstract design with a dark geometric hexagonal pattern."
+      },
+      {
+        "category": "onboarding_texture",
+        "url": "https://images.pexels.com/photos/2092075/pexels-photo-2092075.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Dynamic geometric honeycomb pattern with metallic texture."
+      }
+    ]
+  },
+  "development_instructions": [
+    "Use Phosphor Icons (@phosphor-icons/react) for dense dashboards to maintain clarity and tech aesthetic.",
+    "Ensure all critical actionable UI elements have `data-testid` attributes (e.g., `data-testid=\"login-submit-btn\"`).",
+    "Implement Recharts for Dashboard (Demographic breakdown, service trends). Tooltips must match the dark mode theme.",
+    "Do not use native `<input type='date'>` or `<select>`. Use Shadcn Calendar and Dropdown-Menu.",
+    "Set up Tailwind variables in globals.css using the provided hex codes. No generic Vercel look."
+  ]
+}
