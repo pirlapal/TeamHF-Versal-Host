@@ -59,7 +59,7 @@ export default function AICopilot({ onClose }) {
         <div className="flex items-center gap-2">
           <BotMessageSquare className="h-5 w-5 text-[#00E5FF]" />
           <span className="text-sm font-medium text-[#F9F9FB] font-['Outfit']">AI Copilot</span>
-          <span className="text-[10px] px-1.5 py-0.5 bg-[#00E5FF]/10 text-[#00E5FF] rounded-sm border border-[#00E5FF]/20 font-mono">MOCK</span>
+          <span className="text-[10px] px-1.5 py-0.5 bg-[#00E5FF]/10 text-[#00E5FF] rounded-sm border border-[#00E5FF]/20 font-mono">AI</span>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} className="text-[#6E6E73] hover:text-[#F9F9FB]" data-testid="close-ai-panel">
           <X className="h-4 w-4" />

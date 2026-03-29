@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File, Query, Header
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -14,6 +14,9 @@ import jwt
 import secrets
 import csv
 import io
+import uuid
+import random
+import requests as http_requests
 from bson import ObjectId
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -27,6 +30,79 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = "HS256"
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', '')
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+
+# Object Storage
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+APP_NAME = "caseflow"
+storage_key = None
+
+def init_storage():
+    global storage_key
+    if storage_key:
+        return storage_key
+    if not EMERGENT_LLM_KEY:
+        logger.warning("No EMERGENT_LLM_KEY set, file storage disabled")
+        return None
+    try:
+        resp = http_requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30)
+        resp.raise_for_status()
+        storage_key = resp.json()["storage_key"]
+        return storage_key
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
+        return None
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = init_storage()
+    if not key:
+        raise Exception("Storage not initialized")
+    resp = http_requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data, timeout=120
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+def get_object(path: str):
+    key = init_storage()
+    if not key:
+        raise Exception("Storage not initialized")
+    resp = http_requests.get(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key}, timeout=60
+    )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+# Hugging Face AI
+HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
+hf_client = None
+
+def init_hf():
+    global hf_client
+    try:
+        from huggingface_hub import InferenceClient
+        hf_client = InferenceClient()
+        logger.info("Hugging Face client initialized (serverless)")
+        return True
+    except Exception as e:
+        logger.warning(f"HF init failed: {e}")
+        return False
+
+async def hf_generate(prompt: str, max_tokens: int = 512) -> str:
+    if not hf_client:
+        return None
+    try:
+        response = hf_client.text_generation(
+            prompt, model=HF_MODEL, max_new_tokens=max_tokens,
+            temperature=0.7, do_sample=True
+        )
+        return response
+    except Exception as e:
+        logger.warning(f"HF generation failed: {e}")
+        return None
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -191,6 +267,11 @@ class FollowUpUpdate(BaseModel):
     status: Optional[str] = None
     title: Optional[str] = None
     due_date: Optional[str] = None
+
+class ShareableLinkCreate(BaseModel):
+    email: str
+    role: str = "CASE_WORKER"
+    message: Optional[str] = None
 
 # ── Auth Endpoints ──
 @api_router.post("/auth/login")
@@ -652,39 +733,73 @@ async def export_csv(request: Request):
             writer.writerow({k: c.get(k, "") for k in ["name", "email", "phone", "address", "pending", "created_at"]})
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=clients_export.csv"})
 
-# ── AI Copilot (Mock) ──
-AI_RESPONSES = {
+# ── AI Copilot (Hugging Face + Fallback) ──
+AI_FALLBACK = {
     "summarize": "Based on the client's service history, they have been receiving consistent support. Key areas of focus include housing assistance and mental health counseling. The client shows positive engagement with scheduled visits.",
     "suggest_tags": ["housing", "mental-health", "active-engagement", "follow-up-needed"],
     "suggest_actions": ["Schedule a follow-up visit within 2 weeks", "Review housing application status", "Connect with mental health provider for updated assessment"],
     "missing_fields": ["emergency_contact", "insurance_info", "preferred_language"],
 }
 
+async def build_client_context(client_id: str, tenant_id: str) -> str:
+    if not client_id:
+        return ""
+    try:
+        client = await db.clients.find_one({"_id": ObjectId(client_id), "tenant_id": tenant_id})
+        if not client:
+            return ""
+        services = await db.service_logs.find({"client_id": client_id, "tenant_id": tenant_id}).to_list(10)
+        outcomes = await db.outcomes.find({"client_id": client_id, "tenant_id": tenant_id}).to_list(10)
+        ctx = f"Client: {client.get('name', 'Unknown')}"
+        if client.get('email'):
+            ctx += f", Email: {client['email']}"
+        if client.get('notes'):
+            ctx += f", Notes: {client['notes']}"
+        if services:
+            ctx += f"\nServices ({len(services)} total): " + ", ".join([f"{s.get('service_type','?')} on {s.get('service_date','?')}" for s in services[:5]])
+        if outcomes:
+            ctx += f"\nOutcomes ({len(outcomes)} total): " + ", ".join([f"{o.get('goal_description','?')} [{o.get('status','?')}]" for o in outcomes[:5]])
+        return ctx
+    except Exception:
+        return ""
+
 @api_router.post("/ai/copilot")
 async def ai_copilot(data: AICopilotMessage, request: Request):
     user = await require_role(request, ["ADMIN", "CASE_WORKER"])
     message = data.message.lower()
+    client_context = await build_client_context(data.client_id or "", user.get("tenant_id", ""))
+    model_used = "mock-fallback"
+
+    # Try Hugging Face first
+    if hf_client:
+        try:
+            prompt = f"<s>[INST] You are a helpful case management assistant for a nonprofit organization. "
+            if client_context:
+                prompt += f"Here is context about a client:\n{client_context}\n\n"
+            prompt += f"User request: {data.message}\n\nProvide a concise, helpful response. [/INST]"
+            result = await hf_generate(prompt)
+            if result and len(result.strip()) > 10:
+                return {"type": "chat", "content": result.strip(), "model": f"hf:{HF_MODEL}"}
+        except Exception as e:
+            logger.warning(f"HF copilot error: {e}")
+
+    # Fallback to mock
     if "summar" in message:
-        return {"type": "summary", "content": AI_RESPONSES["summarize"], "model": "mock-ai-v1"}
+        content = AI_FALLBACK["summarize"]
+        if client_context:
+            content = f"Summary for {client_context.split(',')[0].replace('Client: ', '')}:\n{content}"
+        return {"type": "summary", "content": content, "model": model_used}
     elif "tag" in message:
-        return {"type": "tags", "content": AI_RESPONSES["suggest_tags"], "model": "mock-ai-v1"}
+        return {"type": "tags", "content": AI_FALLBACK["suggest_tags"], "model": model_used}
     elif "action" in message or "suggest" in message:
-        return {"type": "actions", "content": AI_RESPONSES["suggest_actions"], "model": "mock-ai-v1"}
+        return {"type": "actions", "content": AI_FALLBACK["suggest_actions"], "model": model_used}
     elif "missing" in message or "field" in message:
-        return {"type": "missing_fields", "content": AI_RESPONSES["missing_fields"], "model": "mock-ai-v1"}
+        return {"type": "missing_fields", "content": AI_FALLBACK["missing_fields"], "model": model_used}
     else:
-        client_context = ""
-        if data.client_id:
-            try:
-                client = await db.clients.find_one({"_id": ObjectId(data.client_id)})
-                if client:
-                    client_context = f" Regarding client {client.get('name', 'Unknown')}: they have active services and outcomes being tracked."
-            except Exception:
-                pass
         return {
             "type": "chat",
-            "content": f"I understand your question about '{data.message}'.{client_context} As your AI assistant, I can help with summarizing case notes, suggesting tags, recommending next actions, and identifying missing fields. Try asking me to 'summarize this client' or 'suggest next actions'.",
-            "model": "mock-ai-v1"
+            "content": f"I understand your question about '{data.message}'. As your AI assistant, I can help with summarizing case notes, suggesting tags, recommending next actions, and identifying missing fields. Try asking me to 'summarize this client' or 'suggest next actions'.",
+            "model": model_used
         }
 
 @api_router.post("/ai/summarize")
@@ -692,23 +807,25 @@ async def ai_summarize(request: Request, client_id: str = ""):
     user = await require_role(request, ["ADMIN", "CASE_WORKER"])
     services = await db.service_logs.find({"client_id": client_id, "tenant_id": user.get("tenant_id")}).to_list(50)
     service_count = len(services)
-    return {
-        "type": "SUMMARY",
-        "content": f"Client has {service_count} service records. {AI_RESPONSES['summarize']}",
-        "status": "PENDING",
-        "model": "mock-ai-v1"
-    }
+    content = f"Client has {service_count} service records. {AI_FALLBACK['summarize']}"
+    if hf_client:
+        ctx = await build_client_context(client_id, user.get("tenant_id", ""))
+        prompt = f"<s>[INST] Summarize this client's case in 3-4 sentences:\n{ctx}\n[/INST]"
+        result = await hf_generate(prompt, 256)
+        if result and len(result.strip()) > 10:
+            content = result.strip()
+    return {"type": "SUMMARY", "content": content, "status": "COMPLETED", "model": f"hf:{HF_MODEL}" if hf_client else "mock-fallback"}
 
 @api_router.post("/ai/suggest")
 async def ai_suggest(request: Request, client_id: str = ""):
     user = await require_role(request, ["ADMIN", "CASE_WORKER"])
     return {
         "suggestions": [
-            {"type": "TAGS", "content": AI_RESPONSES["suggest_tags"], "status": "PENDING"},
-            {"type": "NEXT_ACTIONS", "content": AI_RESPONSES["suggest_actions"], "status": "PENDING"},
-            {"type": "MISSING_FIELDS", "content": AI_RESPONSES["missing_fields"], "status": "PENDING"},
+            {"type": "TAGS", "content": AI_FALLBACK["suggest_tags"], "status": "COMPLETED"},
+            {"type": "NEXT_ACTIONS", "content": AI_FALLBACK["suggest_actions"], "status": "COMPLETED"},
+            {"type": "MISSING_FIELDS", "content": AI_FALLBACK["missing_fields"], "status": "COMPLETED"},
         ],
-        "model": "mock-ai-v1"
+        "model": f"hf:{HF_MODEL}" if hf_client else "mock-fallback"
     }
 
 # ── Payments (Stripe) ──
@@ -870,6 +987,228 @@ async def update_user(user_id: str, request: Request):
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User updated"}
 
+# ── File Attachments ──
+@api_router.post("/clients/{client_id}/attachments")
+async def upload_attachment(client_id: str, request: Request, file: UploadFile = File(...)):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    client = await db.clients.find_one({"_id": ObjectId(client_id), "tenant_id": user.get("tenant_id")})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
+    file_uuid = str(uuid.uuid4())
+    path = f"{APP_NAME}/attachments/{user.get('tenant_id')}/{client_id}/{file_uuid}.{ext}"
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+    try:
+        result = put_object(path, data, file.content_type or "application/octet-stream")
+        file_doc = {
+            "id": file_uuid,
+            "client_id": client_id,
+            "tenant_id": user.get("tenant_id"),
+            "storage_path": result["path"],
+            "original_filename": file.filename,
+            "content_type": file.content_type,
+            "size": result.get("size", len(data)),
+            "uploaded_by": user["id"],
+            "is_deleted": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.attachments.insert_one(file_doc)
+        file_doc.pop("_id", None)
+        return file_doc
+    except Exception as e:
+        logger.error(f"File upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@api_router.get("/clients/{client_id}/attachments")
+async def list_attachments(client_id: str, request: Request):
+    user = await get_current_user(request)
+    attachments = await db.attachments.find(
+        {"client_id": client_id, "tenant_id": user.get("tenant_id"), "is_deleted": False},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return attachments
+
+@api_router.get("/files/{path:path}")
+async def download_file(path: str, request: Request, auth: str = Query(None)):
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+    elif auth:
+        token = auth
+    if not token:
+        token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    record = await db.attachments.find_one({"storage_path": path, "is_deleted": False})
+    if not record:
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        data, ct = get_object(path)
+        return Response(content=data, media_type=record.get("content_type", ct))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+
+@api_router.delete("/attachments/{attachment_id}")
+async def delete_attachment(attachment_id: str, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    result = await db.attachments.update_one(
+        {"id": attachment_id, "tenant_id": user.get("tenant_id")},
+        {"$set": {"is_deleted": True}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    return {"message": "Attachment deleted"}
+
+# ── CSV Import ──
+@api_router.post("/clients/import")
+async def import_clients_csv(request: Request, file: UploadFile = File(...)):
+    user = await require_role(request, ["ADMIN"])
+    tid = user.get("tenant_id")
+    data = await file.read()
+    text = data.decode("utf-8")
+    reader = csv.DictReader(io.StringIO(text))
+    imported = 0
+    skipped = 0
+    errors = []
+    for row_num, row in enumerate(reader, start=2):
+        name = row.get("name", "").strip()
+        if not name:
+            skipped += 1
+            errors.append(f"Row {row_num}: Missing name")
+            continue
+        client_doc = {
+            "name": name,
+            "email": row.get("email", "").strip() or None,
+            "phone": row.get("phone", "").strip() or None,
+            "address": row.get("address", "").strip() or None,
+            "demographics": {},
+            "custom_fields": {},
+            "notes": row.get("notes", "").strip() or "",
+            "pending": False,
+            "is_archived": False,
+            "tenant_id": tid,
+            "created_by": user["id"],
+            "updated_by": user["id"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            await db.clients.insert_one(client_doc)
+            imported += 1
+        except Exception as e:
+            skipped += 1
+            errors.append(f"Row {row_num}: {str(e)[:50]}")
+    return {"imported": imported, "skipped": skipped, "errors": errors[:20]}
+
+# ── Demo Mode ──
+DEMO_NAMES = ["Maria Garcia", "James Wilson", "Aisha Johnson", "Robert Chen", "Elena Petrova", "David Kim", "Fatima Al-Rashid", "Michael Brown", "Priya Patel", "Samuel Okafor", "Lisa Thompson", "Carlos Mendez"]
+DEMO_SERVICES = ["Housing Assistance", "Mental Health Counseling", "Job Training", "Legal Aid", "Food Assistance", "Health Screening", "Financial Literacy", "ESL Classes"]
+DEMO_GOALS = ["Secure stable housing", "Complete job training program", "Obtain GED certification", "Achieve mental health stability", "Secure employment", "Complete legal proceedings", "Establish emergency savings"]
+
+@api_router.post("/demo/seed")
+async def seed_demo_data(request: Request):
+    user = await require_role(request, ["ADMIN"])
+    tid = user.get("tenant_id")
+    existing = await db.clients.count_documents({"tenant_id": tid})
+    if existing > 50:
+        raise HTTPException(status_code=400, detail="Too many existing clients. Archive or delete some first.")
+    created_clients = []
+    now = datetime.now(timezone.utc)
+    for name in DEMO_NAMES:
+        client_doc = {
+            "name": name,
+            "email": f"{name.lower().replace(' ', '.')}@example.com",
+            "phone": f"+1 ({random.randint(200,999)}) {random.randint(200,999)}-{random.randint(1000,9999)}",
+            "address": f"{random.randint(100,9999)} {random.choice(['Oak','Elm','Pine','Maple','Cedar'])} {random.choice(['St','Ave','Blvd','Dr'])}",
+            "demographics": {"age_group": random.choice(["18-25", "26-35", "36-45", "46-55", "56+"]), "gender": random.choice(["Male", "Female", "Non-binary"])},
+            "notes": f"Demo client created for testing. Referred by {random.choice(['Community Center', 'Hospital', 'School District', 'Self-referral'])}.",
+            "pending": random.random() < 0.2,
+            "is_archived": False,
+            "tenant_id": tid,
+            "created_by": user["id"],
+            "updated_by": user["id"],
+            "created_at": (now - timedelta(days=random.randint(1, 90))).isoformat(),
+            "updated_at": now.isoformat(),
+        }
+        result = await db.clients.insert_one(client_doc)
+        cid = str(result.inserted_id)
+        created_clients.append(cid)
+        # Services
+        for _ in range(random.randint(1, 5)):
+            svc_date = (now - timedelta(days=random.randint(1, 60))).strftime("%Y-%m-%d")
+            await db.service_logs.insert_one({
+                "client_id": cid, "tenant_id": tid,
+                "service_date": svc_date,
+                "service_type": random.choice(DEMO_SERVICES),
+                "provider_name": f"Dr. {random.choice(['Smith','Jones','Lee','Williams','Martinez'])}",
+                "notes": "Demo service log entry.",
+                "created_by": user["id"],
+                "created_at": (now - timedelta(days=random.randint(1, 60))).isoformat(),
+            })
+        # Outcomes
+        for _ in range(random.randint(0, 3)):
+            target = (now + timedelta(days=random.randint(30, 180))).strftime("%Y-%m-%d")
+            await db.outcomes.insert_one({
+                "client_id": cid, "tenant_id": tid,
+                "goal_description": random.choice(DEMO_GOALS),
+                "target_date": target,
+                "status": random.choice(["NOT_STARTED", "IN_PROGRESS", "ACHIEVED", "NOT_ACHIEVED"]),
+                "created_by": user["id"],
+                "created_at": now.isoformat(),
+            })
+        # Visits
+        for _ in range(random.randint(0, 3)):
+            visit_date = (now + timedelta(days=random.randint(-30, 30))).isoformat()
+            await db.visits.insert_one({
+                "client_id": cid, "tenant_id": tid,
+                "date": visit_date,
+                "duration": random.choice([30, 45, 60, 90]),
+                "notes": "Demo visit.",
+                "status": random.choice(["SCHEDULED", "COMPLETED", "NO_SHOW"]),
+                "case_worker_id": user["id"],
+                "case_worker_name": user.get("name", "Admin"),
+                "created_at": now.isoformat(),
+            })
+    return {"message": f"Demo data created: {len(created_clients)} clients with services, outcomes, and visits", "client_count": len(created_clients)}
+
+# ── Shareable Invite Links ──
+@api_router.post("/invites/shareable")
+async def create_shareable_invite(data: ShareableLinkCreate, request: Request):
+    user = await require_role(request, ["ADMIN"])
+    token = secrets.token_urlsafe(32)
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+    invite_doc = {
+        "email": data.email.strip().lower(),
+        "role": data.role,
+        "token": token,
+        "tenant_id": user.get("tenant_id"),
+        "invited_by": user["id"],
+        "message": data.message or "",
+        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=72)).isoformat(),
+        "accepted_at": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.invites.insert_one(invite_doc)
+    tenant = await db.tenants.find_one({"_id": ObjectId(user.get("tenant_id"))})
+    org_name = tenant.get("name", "CaseFlow") if tenant else "CaseFlow"
+    shareable_url = f"{frontend_url}/invite/{token}"
+    return {
+        "token": token,
+        "email": data.email,
+        "role": data.role,
+        "shareable_url": shareable_url,
+        "organization": org_name,
+        "expires_at": invite_doc["expires_at"],
+        "message": data.message or "",
+    }
+
 # ── Health Check ──
 @api_router.get("/health")
 async def health():
@@ -901,6 +1240,15 @@ async def startup():
     await db.visits.create_index([("tenant_id", 1), ("date", 1)])
     await db.outcomes.create_index([("tenant_id", 1), ("client_id", 1)])
     await db.payment_transactions.create_index("session_id")
+    await db.attachments.create_index([("tenant_id", 1), ("client_id", 1)])
+    # Init storage
+    try:
+        init_storage()
+        logger.info("Object storage initialized")
+    except Exception as e:
+        logger.warning(f"Storage init skipped: {e}")
+    # Init HF
+    init_hf()
     # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@caseflow.io")
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")

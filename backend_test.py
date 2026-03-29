@@ -137,6 +137,85 @@ class CaseFlowAPITester:
         """Test admin users endpoint"""
         return self.run_test("Admin Users", "GET", "admin/users", 200)
 
+    def test_demo_seed(self):
+        """Test demo data seeding"""
+        return self.run_test(
+            "Demo Data Seed",
+            "POST",
+            "demo/seed",
+            200
+        )
+
+    def test_shareable_invite(self):
+        """Test shareable invite creation"""
+        invite_data = {
+            "email": f"test{datetime.now().strftime('%H%M%S')}@example.com",
+            "role": "CASE_WORKER",
+            "message": "Welcome to the team!"
+        }
+        return self.run_test(
+            "Create Shareable Invite",
+            "POST",
+            "invites/shareable",
+            200,
+            data=invite_data
+        )
+
+    def test_csv_import(self, client_id=None):
+        """Test CSV import functionality"""
+        # Create a simple CSV content for testing
+        csv_content = "name,email,phone,address,notes\nTest Import User,import@test.com,555-1234,123 Import St,Imported via CSV"
+        
+        # For this test, we'll simulate the file upload
+        # In a real scenario, this would be a multipart/form-data request
+        print(f"\n🔍 Testing CSV Import...")
+        print(f"   Note: CSV import requires multipart/form-data - testing endpoint availability")
+        
+        # Test if the endpoint exists by checking with invalid data
+        url = f"{self.base_url}/api/clients/import"
+        test_headers = {'Authorization': f'Bearer {self.token}'}
+        
+        try:
+            # This will likely fail due to missing file, but we can check if endpoint exists
+            response = self.session.post(url, headers=test_headers)
+            if response.status_code in [400, 422]:  # Expected for missing file
+                print(f"✅ CSV Import endpoint exists - Status: {response.status_code}")
+                self.tests_passed += 1
+                self.tests_run += 1
+                return True, {}
+            else:
+                print(f"❌ Unexpected response - Status: {response.status_code}")
+                self.failed_tests.append({
+                    "test": "CSV Import",
+                    "expected": "400 or 422",
+                    "actual": response.status_code
+                })
+                self.tests_run += 1
+                return False, {}
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            self.failed_tests.append({
+                "test": "CSV Import",
+                "error": str(e)
+            })
+            self.tests_run += 1
+            return False, {}
+
+    def test_file_attachments(self, client_id):
+        """Test file attachments functionality"""
+        if not client_id:
+            print(f"\n🔍 Testing File Attachments...")
+            print(f"   Skipped - No client ID available")
+            return False, {}
+            
+        # Test listing attachments for a client
+        return self.run_test(
+            f"List Client Attachments",
+            "GET",
+            f"clients/{client_id}/attachments",
+            200
+        )
+
 def main():
     print("🚀 Starting CaseFlow API Testing...")
     print("=" * 50)
@@ -168,6 +247,14 @@ def main():
     tester.test_visits()
     tester.test_admin_vocabulary()
     tester.test_admin_users()
+    
+    # Test new features
+    print(f"\n🆕 Testing New Features...")
+    tester.test_demo_seed()
+    tester.test_shareable_invite()
+    tester.test_csv_import()
+    if client_id:
+        tester.test_file_attachments(client_id)
 
     # Print results
     print("\n" + "=" * 50)

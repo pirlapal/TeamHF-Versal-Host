@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, ChevronLeft, ChevronRight, UserCheck, Clock } from "lucide-react";
+import { Search, Plus, ChevronLeft, ChevronRight, UserCheck, Clock, Upload, Download } from "lucide-react";
 import { toast } from "sonner";
 import { formatApiError } from "@/lib/api";
 
@@ -24,6 +24,8 @@ export default function Clients() {
   const [newClient, setNewClient] = useState({ name: "", email: "", phone: "", address: "", notes: "" });
   const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(1);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
@@ -56,6 +58,44 @@ export default function Clients() {
     }
   };
 
+  const handleCsvImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".csv")) { toast.error("Please select a CSV file"); return; }
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post("/clients/import", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      setImportResult(data);
+      if (data.imported > 0) {
+        toast.success(`Imported ${data.imported} clients`);
+        fetchClients();
+      } else {
+        toast.error("No clients imported");
+      }
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const res = await api.get("/reports/export", { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "clients_export.csv";
+      a.click();
+    } catch (err) { toast.error("Export failed"); }
+  };
+
   const role = user?.role;
 
   return (
@@ -67,9 +107,26 @@ export default function Clients() {
           <p className="text-sm text-[#6E6E73] mt-1">{pagination.total_count} total clients</p>
         </div>
         {(role === "ADMIN" || role === "CASE_WORKER") && (
-          <Button onClick={() => setShowCreate(true)} className="bg-[#0055FF] hover:bg-[#0044CC] gap-2 rounded-sm" data-testid="add-client-btn">
-            <Plus className="h-4 w-4" /> Add Client
-          </Button>
+          <div className="flex items-center gap-2">
+            {role === "ADMIN" && (
+              <>
+                <label className="cursor-pointer">
+                  <input type="file" accept=".csv" className="hidden" onChange={handleCsvImport} disabled={importing} data-testid="csv-import-input" />
+                  <div className="flex items-center gap-2 px-3 py-2 border border-[#2A2A2D] rounded-sm text-sm text-[#A0A0A5] hover:bg-white/5 transition-colors h-9" data-testid="csv-import-btn">
+                    {importing ? <div className="w-3.5 h-3.5 border-2 border-[#A0A0A5]/30 border-t-[#A0A0A5] rounded-full animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                    <span className="hidden sm:inline">{importing ? "Importing..." : "Import CSV"}</span>
+                  </div>
+                </label>
+                <Button variant="outline" size="sm" onClick={handleExport} className="border-[#2A2A2D] text-[#A0A0A5] hover:bg-white/5 gap-2 h-9 rounded-sm" data-testid="csv-export-btn">
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Export</span>
+                </Button>
+              </>
+            )}
+            <Button onClick={() => setShowCreate(true)} className="bg-[#0055FF] hover:bg-[#0044CC] gap-2 rounded-sm" data-testid="add-client-btn">
+              <Plus className="h-4 w-4" /> Add Client
+            </Button>
+          </div>
         )}
       </div>
 
@@ -84,6 +141,16 @@ export default function Clients() {
           data-testid="client-search-input"
         />
       </div>
+
+      {/* Import Result Banner */}
+      {importResult && (
+        <div className="p-3 bg-[#141415] border border-[#2A2A2D] rounded-sm flex items-center justify-between" data-testid="import-result-banner">
+          <span className="text-sm text-[#A0A0A5]">
+            Import complete: <span className="text-[#00E676] font-mono">{importResult.imported}</span> imported, <span className="text-[#FFEA00] font-mono">{importResult.skipped}</span> skipped
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => setImportResult(null)} className="text-[#6E6E73] h-7">Dismiss</Button>
+        </div>
+      )}
 
       {/* Client Table */}
       {loading ? (

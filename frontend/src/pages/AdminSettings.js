@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserPlus, Save, Trash2, Plus } from "lucide-react";
+import { UserPlus, Save, Trash2, Plus, Database, Link, Copy, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminSettings() {
@@ -21,6 +21,9 @@ export default function AdminSettings() {
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: "", role: "CASE_WORKER" });
   const [inviting, setInviting] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [shareableLink, setShareableLink] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -57,17 +60,42 @@ export default function AdminSettings() {
   const handleInvite = async (e) => {
     e.preventDefault();
     setInviting(true);
+    setShareableLink(null);
     try {
-      await api.post("/invites", inviteForm);
-      toast.success(`Invite sent to ${inviteForm.email}`);
-      setShowInvite(false);
+      const { data } = await api.post("/invites/shareable", inviteForm);
+      setShareableLink(data);
+      toast.success(`Invite created for ${inviteForm.email}`);
       setInviteForm({ email: "", role: "CASE_WORKER" });
-      const { data } = await api.get("/invites");
-      setInvites(data);
+      const res = await api.get("/invites");
+      setInvites(res.data);
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail));
     } finally {
       setInviting(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!shareableLink?.shareable_url) return;
+    try {
+      await navigator.clipboard.writeText(shareableLink.shareable_url);
+      setCopied(true);
+      toast.success("Link copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy");
+    }
+  };
+
+  const handleSeedDemo = async () => {
+    setSeeding(true);
+    try {
+      const { data } = await api.post("/demo/seed");
+      toast.success(data.message);
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -98,6 +126,7 @@ export default function AdminSettings() {
           <TabsTrigger value="invites" className="data-[state=active]:bg-[#0055FF] data-[state=active]:text-white rounded-sm text-[#A0A0A5] text-sm">Invites</TabsTrigger>
           <TabsTrigger value="vocabulary" className="data-[state=active]:bg-[#0055FF] data-[state=active]:text-white rounded-sm text-[#A0A0A5] text-sm">Vocabulary</TabsTrigger>
           <TabsTrigger value="fields" className="data-[state=active]:bg-[#0055FF] data-[state=active]:text-white rounded-sm text-[#A0A0A5] text-sm">Field Sets</TabsTrigger>
+          <TabsTrigger value="demo" className="data-[state=active]:bg-[#0055FF] data-[state=active]:text-white rounded-sm text-[#A0A0A5] text-sm">Demo Mode</TabsTrigger>
         </TabsList>
 
         {/* Users Tab */}
@@ -137,7 +166,7 @@ export default function AdminSettings() {
 
         {/* Invites Tab */}
         <TabsContent value="invites" className="mt-4 space-y-4">
-          <Button onClick={() => setShowInvite(true)} className="bg-[#0055FF] hover:bg-[#0044CC] gap-2 rounded-sm" data-testid="invite-user-btn">
+          <Button onClick={() => { setShowInvite(true); setShareableLink(null); }} className="bg-[#0055FF] hover:bg-[#0044CC] gap-2 rounded-sm" data-testid="invite-user-btn">
             <UserPlus className="h-4 w-4" /> Invite User
           </Button>
           {invites.length === 0 ? (
@@ -222,12 +251,40 @@ export default function AdminSettings() {
             )}
           </div>
         </TabsContent>
+
+        {/* Demo Mode Tab */}
+        <TabsContent value="demo" className="mt-4 space-y-4">
+          <div className="bg-[#141415] border border-[#2A2A2D] rounded-sm p-6 space-y-4">
+            <div className="flex items-center gap-3 mb-2">
+              <Database className="h-5 w-5 text-[#00E5FF]" />
+              <h3 className="text-lg font-medium font-['Outfit'] text-[#F9F9FB]">Load Demo Data</h3>
+            </div>
+            <p className="text-sm text-[#A0A0A5]">
+              Populate your organization with realistic demo data including 12 clients, service logs, outcomes, and scheduled visits. Perfect for testing and training.
+            </p>
+            <div className="p-3 bg-[#FFEA00]/5 border border-[#FFEA00]/20 rounded-sm">
+              <p className="text-xs text-[#FFEA00]">This will add new data to your existing records. It won't delete or modify current data.</p>
+            </div>
+            <Button
+              onClick={handleSeedDemo}
+              disabled={seeding}
+              className="bg-[#00E5FF] hover:bg-[#00E5FF]/80 text-black gap-2 rounded-sm font-medium"
+              data-testid="seed-demo-btn"
+            >
+              {seeding ? (
+                <><div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> Generating...</>
+              ) : (
+                <><Database className="h-4 w-4" /> Load Demo Data</>
+              )}
+            </Button>
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Invite Dialog */}
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
         <DialogContent className="bg-[#141415] border-[#2A2A2D] text-[#F9F9FB]" data-testid="invite-dialog">
-          <DialogHeader><DialogTitle className="font-['Outfit']">Invite User</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-['Outfit']">Invite Team Member</DialogTitle></DialogHeader>
           <form onSubmit={handleInvite} className="space-y-4">
             <div className="space-y-2">
               <Label className="text-[#A0A0A5] text-xs uppercase">Email *</Label>
@@ -245,10 +302,33 @@ export default function AdminSettings() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Shareable Link Result */}
+            {shareableLink && (
+              <div className="p-4 bg-[#0A0A0B] border border-[#00E676]/30 rounded-sm space-y-3" data-testid="shareable-link-result">
+                <div className="flex items-center gap-2 text-sm text-[#00E676]">
+                  <Link className="h-4 w-4" /> Invite link created!
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={shareableLink.shareable_url}
+                    className="flex-1 bg-transparent border border-[#2A2A2D] rounded-sm px-3 py-2 text-xs text-[#A0A0A5] font-mono truncate"
+                    data-testid="shareable-link-url"
+                  />
+                  <Button type="button" size="sm" onClick={handleCopyLink} className={`gap-1 rounded-sm ${copied ? "bg-[#00E676] text-black" : "bg-[#2A2A2D] text-[#A0A0A5] hover:bg-white/10"}`} data-testid="copy-link-btn">
+                    {copied ? <><CheckCircle className="h-3 w-3" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}
+                  </Button>
+                </div>
+                <p className="text-xs text-[#6E6E73]">Share this link with {shareableLink.email}. Expires in 72 hours.</p>
+              </div>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setShowInvite(false)} className="text-[#A0A0A5]">Cancel</Button>
               <Button type="submit" disabled={inviting} className="bg-[#0055FF] hover:bg-[#0044CC]" data-testid="send-invite-btn">
-                {inviting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "Send Invite"}
+                {inviting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Create & Share Invite</>}
               </Button>
             </DialogFooter>
           </form>

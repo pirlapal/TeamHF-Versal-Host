@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Edit, Archive, Plus, CheckCircle, Clock, XCircle, Target, BotMessageSquare } from "lucide-react";
+import { ArrowLeft, Edit, Archive, Plus, CheckCircle, Clock, XCircle, Target, BotMessageSquare, Paperclip, Upload, Trash2, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_COLORS = {
@@ -34,7 +34,9 @@ export default function ClientDetail() {
   const [services, setServices] = useState([]);
   const [outcomes, setOutcomes] = useState([]);
   const [followUps, setFollowUps] = useState([]);
+  const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [showOutcomeForm, setShowOutcomeForm] = useState(false);
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
@@ -48,16 +50,18 @@ export default function ClientDetail() {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [clientRes, servicesRes, outcomesRes, fuRes] = await Promise.all([
+        const [clientRes, servicesRes, outcomesRes, fuRes, attRes] = await Promise.all([
           api.get(`/clients/${id}`),
           api.get(`/clients/${id}/services`),
           api.get(`/clients/${id}/outcomes`),
           api.get(`/clients/${id}/follow-ups`),
+          api.get(`/clients/${id}/attachments`),
         ]);
         setClient(clientRes.data);
         setServices(servicesRes.data);
         setOutcomes(outcomesRes.data);
         setFollowUps(fuRes.data);
+        setAttachments(attRes.data);
         setEditData(clientRes.data);
       } catch (err) {
         toast.error("Failed to load client");
@@ -129,6 +133,43 @@ export default function ClientDetail() {
     } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
   };
 
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error("File too large (max 10MB)"); return; }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post(`/clients/${id}/attachments`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      setAttachments([data, ...attachments]);
+      toast.success("File uploaded");
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    finally { setUploading(false); e.target.value = ""; }
+  };
+
+  const handleDeleteAttachment = async (attId) => {
+    try {
+      await api.delete(`/attachments/${attId}`);
+      setAttachments(attachments.filter(a => a.id !== attId));
+      toast.success("Attachment deleted");
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+  };
+
+  const handleDownloadAttachment = async (att) => {
+    try {
+      const res = await api.get(`/files/${att.storage_path}`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = att.original_filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) { toast.error("Download failed"); }
+  };
+
   const role = user?.role;
 
   if (loading) return (
@@ -194,6 +235,7 @@ export default function ClientDetail() {
           <TabsTrigger value="services" className="data-[state=active]:bg-[#0055FF] data-[state=active]:text-white rounded-sm text-[#A0A0A5] text-sm">Services ({services.length})</TabsTrigger>
           <TabsTrigger value="outcomes" className="data-[state=active]:bg-[#0055FF] data-[state=active]:text-white rounded-sm text-[#A0A0A5] text-sm">Outcomes ({outcomes.length})</TabsTrigger>
           <TabsTrigger value="follow-ups" className="data-[state=active]:bg-[#0055FF] data-[state=active]:text-white rounded-sm text-[#A0A0A5] text-sm">Follow-ups ({followUps.length})</TabsTrigger>
+          <TabsTrigger value="attachments" className="data-[state=active]:bg-[#0055FF] data-[state=active]:text-white rounded-sm text-[#A0A0A5] text-sm">Files ({attachments.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="services" className="mt-4 space-y-4">
@@ -261,6 +303,48 @@ export default function ClientDetail() {
                   </div>
                   {f.description && <p className="text-xs text-[#6E6E73]">{f.description}</p>}
                   {f.due_date && <p className="text-xs text-[#A0A0A5] mt-1 font-mono">Due: {f.due_date}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="attachments" className="mt-4 space-y-4">
+          {(role === "ADMIN" || role === "CASE_WORKER") && (
+            <div className="flex items-center gap-3">
+              <label className="cursor-pointer">
+                <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} data-testid="file-upload-input" />
+                <div className="flex items-center gap-2 px-4 py-2 border border-[#2A2A2D] rounded-sm text-sm text-[#A0A0A5] hover:bg-white/5 transition-colors" data-testid="upload-file-btn">
+                  {uploading ? <div className="w-4 h-4 border-2 border-[#A0A0A5]/30 border-t-[#A0A0A5] rounded-full animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {uploading ? "Uploading..." : "Upload File"}
+                </div>
+              </label>
+              <span className="text-xs text-[#6E6E73]">Max 10MB per file</span>
+            </div>
+          )}
+          {attachments.length === 0 ? (
+            <div className="text-center py-12 text-[#6E6E73] text-sm">No files attached yet</div>
+          ) : (
+            <div className="space-y-2">
+              {attachments.map((att) => (
+                <div key={att.id} className="bg-[#141415] border border-[#2A2A2D] rounded-sm p-4 flex items-center justify-between" data-testid={`attachment-${att.id}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText className="h-5 w-5 text-[#0055FF] shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm text-[#F9F9FB] truncate">{att.original_filename}</p>
+                      <p className="text-xs text-[#6E6E73] font-mono">{(att.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => handleDownloadAttachment(att)} className="text-[#0055FF] hover:bg-[#0055FF]/10" data-testid={`download-${att.id}`}>
+                      Download
+                    </Button>
+                    {(role === "ADMIN" || role === "CASE_WORKER") && (
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteAttachment(att.id)} className="text-[#FF1744] hover:bg-[#FF1744]/10 h-8 w-8" data-testid={`delete-att-${att.id}`}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
