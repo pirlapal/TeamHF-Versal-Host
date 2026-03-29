@@ -44,6 +44,13 @@ export default function AICopilot({ onClose }) {
   const [executing, setExecuting] = useState(false);
   const scrollRef = useRef(null);
 
+  const fetchClients = async () => {
+    try {
+      const { data } = await api.get("/clients", { params: { page_size: 100 } });
+      setClients(data?.data || []);
+    } catch {}
+  };
+
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
@@ -120,8 +127,12 @@ export default function AICopilot({ onClose }) {
       setMessages((prev) => [...prev, { role: "ai", content: `Done! "${confirmTemplate.label}" completed successfully. ${data.id ? `ID: ${data.id}` : ""}` }]);
       toast.success(`${confirmTemplate.label} completed!`);
 
-      if (confirmTemplate.id === "create_client" && data.id) {
-        navigate(`/clients/${data.id}`);
+      // Refresh clients list after creating a new client so it's available for scheduling visits
+      if (confirmTemplate.id === "create_client") {
+        await fetchClients();
+        if (data.id) {
+          navigate(`/clients/${data.id}`);
+        }
       }
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail));

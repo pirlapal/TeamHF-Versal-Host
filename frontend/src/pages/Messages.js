@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import api from "@/lib/api";
 import { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -16,6 +17,7 @@ import { toast } from "sonner";
 
 export default function Messages() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
   const [showCompose, setShowCompose] = useState(false);
@@ -30,12 +32,13 @@ export default function Messages() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const { data } = await api.get("/admin/users");
-      setUsers(data.filter((u) => u.id !== user?.id));
-    } catch {
-      // Non-admin may not have access
+      const { data } = await api.get("/messages/users");
+      setUsers(data || []);
+    } catch (err) {
+      console.error("Failed to fetch users:", err);
+      setUsers([]);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => { fetchMessages(); fetchUsers(); }, [fetchMessages, fetchUsers]);
 
@@ -81,17 +84,17 @@ export default function Messages() {
     return (
       <div className="space-y-4" data-testid="message-detail">
         <Button variant="ghost" onClick={() => setSelectedMsg(null)} className="text-[#9CA3AF] gap-2 rounded-lg" data-testid="back-to-messages">
-          <ChevronLeft className="h-4 w-4" /> Back to Messages
+          <ChevronLeft className="h-4 w-4" /> {t("messages.backToMessages")}
         </Button>
         <div className="bg-white border border-[#E8E8E8] rounded-xl p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold font-['Nunito'] text-[#1F2937]">{selectedMsg.subject}</h2>
             <Badge variant="outline" className={`text-xs rounded-full ${selectedMsg.is_read ? "border-[#E5E7EB] text-[#9CA3AF]" : "border-[#A7F3D0] text-[#10B981] bg-[#ECFDF5]"}`}>
-              {selectedMsg.is_read ? "Read" : "Unread"}
+              {selectedMsg.is_read ? t("messages.read") : t("messages.unread")}
             </Badge>
           </div>
           <div className="text-xs text-[#9CA3AF]">
-            <span className="font-semibold text-[#6B7280]">{isFrom ? "To" : "From"}:</span> {isFrom ? selectedMsg.to_user_name : selectedMsg.from_user_name}
+            <span className="font-semibold text-[#6B7280]">{isFrom ? t("messages.to") : t("messages.from")}:</span> {isFrom ? selectedMsg.to_user_name : selectedMsg.from_user_name}
             <span className="ml-3">{selectedMsg.created_at?.split("T")[0]}</span>
           </div>
           <p className="text-sm text-[#4B5563] whitespace-pre-wrap">{selectedMsg.body}</p>
@@ -112,7 +115,7 @@ export default function Messages() {
           {/* Reply box */}
           {(user?.role === "ADMIN" || user?.role === "CASE_WORKER") && (
             <div className="flex gap-2 border-t border-[#F3F4F6] pt-4">
-              <Textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Write a reply..."
+              <Textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder={t("messages.writeReply")}
                 className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] min-h-[60px] rounded-lg flex-1" data-testid="reply-input" />
               <Button onClick={() => handleReply(selectedMsg.id)} disabled={sending || !replyText.trim()}
                 className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg self-end" data-testid="send-reply-btn">
@@ -129,14 +132,14 @@ export default function Messages() {
     <div className="space-y-6" data-testid="messages-page">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">Messages</h1>
-          <p className="text-sm text-[#9CA3AF] mt-1">Team communication and internal messaging</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">{t("messages.title")}</h1>
+          <p className="text-sm text-[#9CA3AF] mt-1">{t("messages.subtitle")}</p>
         </div>
         {(user?.role === "ADMIN" || user?.role === "CASE_WORKER") && (
           <Button onClick={() => setShowCompose(true)}
             className="bg-gradient-to-r from-[#F97316] to-[#FB923C] hover:from-[#EA580C] hover:to-[#F97316] text-white gap-2 rounded-lg font-bold shadow-md shadow-orange-200"
             data-testid="compose-message-btn">
-            <Send className="h-4 w-4" /> New Message
+            <Send className="h-4 w-4" /> {t("messages.newMessage")}
           </Button>
         )}
       </div>
@@ -144,8 +147,8 @@ export default function Messages() {
       {messages.length === 0 ? (
         <div className="bg-white border border-[#E8E8E8] rounded-xl p-12 text-center">
           <Inbox className="h-12 w-12 text-[#E5E7EB] mx-auto mb-4" />
-          <p className="text-[#6B7280]">No messages yet</p>
-          <p className="text-xs text-[#9CA3AF] mt-1">Send a message to a team member to get started</p>
+          <p className="text-[#6B7280]">{t("messages.noMessagesYet")}</p>
+          <p className="text-xs text-[#9CA3AF] mt-1">{t("messages.sendToTeamMember")}</p>
         </div>
       ) : (
         <div className="bg-white border border-[#E8E8E8] rounded-xl overflow-hidden divide-y divide-[#F3F4F6]" data-testid="messages-list">
@@ -177,32 +180,32 @@ export default function Messages() {
       {/* Compose Dialog */}
       <Dialog open={showCompose} onOpenChange={setShowCompose}>
         <DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] max-w-lg rounded-2xl" data-testid="compose-dialog">
-          <DialogHeader><DialogTitle className="font-['Nunito'] text-xl font-bold">New Message</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-['Nunito'] text-xl font-bold">{t("messages.newMessage")}</DialogTitle></DialogHeader>
           <form onSubmit={handleSend} className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">To</Label>
+              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">{t("messages.to")}</Label>
               <Select value={composeForm.to_user_id} onValueChange={v => setComposeForm({ ...composeForm, to_user_id: v })}>
-                <SelectTrigger className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="compose-to"><SelectValue placeholder="Select recipient" /></SelectTrigger>
+                <SelectTrigger className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="compose-to"><SelectValue placeholder={t("messages.selectRecipient")} /></SelectTrigger>
                 <SelectContent className="bg-white border-[#E8E8E8] rounded-xl">
                   {users.map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.role})</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Subject</Label>
+              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">{t("messages.subject")}</Label>
               <Input value={composeForm.subject} onChange={e => setComposeForm({ ...composeForm, subject: e.target.value })} required
-                placeholder="Message subject" className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="compose-subject" />
+                placeholder={t("messages.messageSubject")} className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="compose-subject" />
             </div>
             <div className="space-y-2">
-              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Message</Label>
+              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">{t("messages.message")}</Label>
               <Textarea value={composeForm.body} onChange={e => setComposeForm({ ...composeForm, body: e.target.value })} required
-                placeholder="Write your message..." className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] min-h-[120px] rounded-lg" data-testid="compose-body" />
+                placeholder={t("messages.writeMessage")} className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] min-h-[120px] rounded-lg" data-testid="compose-body" />
             </div>
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setShowCompose(false)} className="text-[#9CA3AF] rounded-lg">Cancel</Button>
+              <Button type="button" variant="ghost" onClick={() => setShowCompose(false)} className="text-[#9CA3AF] rounded-lg">{t("common.cancel")}</Button>
               <Button type="submit" disabled={sending || !composeForm.to_user_id}
                 className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold gap-2" data-testid="compose-send-btn">
-                {sending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Send className="h-4 w-4" /> Send</>}
+                {sending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Send className="h-4 w-4" /> {t("messages.send")}</>}
               </Button>
             </DialogFooter>
           </form>

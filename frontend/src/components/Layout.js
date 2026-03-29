@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 import AICopilot from "@/components/AICopilot";
 import NotificationBell from "@/components/NotificationBell";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { Menu, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -24,17 +25,20 @@ export default function Layout() {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex-1" />
-          <NotificationBell />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setAiOpen(!aiOpen)}
-            className="text-[#14B8A6] hover:bg-[#14B8A6]/10 gap-2 rounded-lg"
-            data-testid="ai-copilot-toggle"
-          >
-            <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline text-sm font-medium">AI Assistant</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher variant="ghost" />
+            <NotificationBell />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAiOpen(!aiOpen)}
+              className="text-[#14B8A6] hover:bg-[#14B8A6]/10 gap-2 rounded-lg"
+              data-testid="ai-copilot-toggle"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline text-sm font-medium">AI Assistant</span>
+            </Button>
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           <Outlet />

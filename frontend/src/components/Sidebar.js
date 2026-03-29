@@ -1,5 +1,6 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
@@ -9,18 +10,19 @@ import {
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { to: "/dashboard", vocabKey: "dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
-  { to: "/clients", vocabKey: "clients", icon: Users, testId: "nav-clients" },
-  { to: "/calendar", vocabKey: "calendar", icon: Calendar, testId: "nav-calendar" },
-  { to: "/payments", vocabKey: "payments", icon: CreditCard, testId: "nav-payments" },
-  { to: "/reports", vocabKey: "reports", icon: FileText, testId: "nav-reports", roles: ["ADMIN"] },
-  { to: "/messages", vocabKey: "messages", icon: Mail, testId: "nav-messages", roles: ["ADMIN", "CASE_WORKER"] },
-  { to: "/settings", vocabKey: "settings", icon: Settings, testId: "nav-settings", roles: ["ADMIN"] },
+  { to: "/dashboard", vocabKey: "dashboard", i18nKey: "nav.dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+  { to: "/clients", vocabKey: "clients", i18nKey: "nav.clients", icon: Users, testId: "nav-clients" },
+  { to: "/calendar", vocabKey: "calendar", i18nKey: "nav.calendar", icon: Calendar, testId: "nav-calendar" },
+  { to: "/payments", vocabKey: "payments", i18nKey: "nav.payments", icon: CreditCard, testId: "nav-payments" },
+  { to: "/reports", vocabKey: "reports", i18nKey: "nav.reports", icon: FileText, testId: "nav-reports", roles: ["ADMIN"] },
+  { to: "/messages", vocabKey: "messages", i18nKey: "nav.messages", icon: Mail, testId: "nav-messages", roles: ["ADMIN", "CASE_WORKER"] },
+  { to: "/settings", vocabKey: "settings", i18nKey: "nav.settings", icon: Settings, testId: "nav-settings", roles: ["ADMIN"] },
 ];
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { v } = useTenant();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -56,7 +58,7 @@ export default function Sidebar() {
               }
             >
               <Icon className="h-4 w-4" />
-              {v(item.vocabKey)}
+              {t(item.i18nKey) || v(item.vocabKey)}
             </NavLink>
           );
         })}
@@ -74,7 +76,7 @@ export default function Sidebar() {
           </div>
         </div>
         <Button variant="ghost" onClick={handleLogout} className="w-full justify-start text-[#9CA3AF] hover:text-[#EF4444] hover:bg-[#FEF2F2] h-8 text-xs gap-2 rounded-lg" data-testid="logout-btn">
-          <LogOut className="h-3.5 w-3.5" /> Sign Out
+          <LogOut className="h-3.5 w-3.5" /> {t("nav.signOut")}
         </Button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import api from "@/lib/api";
 import { formatApiError } from "@/lib/api";
 import { useTenant } from "@/lib/tenant";
@@ -16,6 +17,7 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function AdminSettings() {
+  const { t } = useTranslation();
   const { refreshVocab, refreshFieldSets } = useTenant();
   const [vocab, setVocab] = useState([]);
   const [users, setUsers] = useState([]);
@@ -26,7 +28,7 @@ export default function AdminSettings() {
   const [fieldSetFields, setFieldSetFields] = useState([{ label: "", type: "TEXT", required: false }]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: "", role: "CASE_WORKER" });
+  const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "CASE_WORKER", expiry_hours: 48 });
   const [inviting, setInviting] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -45,7 +47,7 @@ export default function AdminSettings() {
       setLoading(true);
       try {
         const [vocabRes, usersRes, invitesRes, fsRes, permsRes, rolesRes, emailRes] = await Promise.all([
-          api.get("/admin/vocabulary"), api.get("/admin/users"), api.get("/invites"), api.get("/admin/field-sets"),
+          api.get("/admin/vocabulary"), api.get("/admin/users"), api.get("/admin/invitations"), api.get("/admin/field-sets"),
           api.get("/admin/permissions/all"), api.get("/admin/roles"), api.get("/admin/email-settings"),
         ]);
         setVocab(vocabRes.data); setUsers(usersRes.data); setInvites(invitesRes.data); setFieldSets(fsRes.data);
@@ -61,13 +63,18 @@ export default function AdminSettings() {
   };
 
   const handleInvite = async (e) => {
-    e.preventDefault(); setInviting(true); setShareableLink(null);
+    e.preventDefault();
+    if (!inviteForm.name || !inviteForm.email) {
+      toast.error("Name and email are required");
+      return;
+    }
+    setInviting(true); setShareableLink(null);
     try {
-      const { data } = await api.post("/invites/shareable", inviteForm);
-      setShareableLink(data);
-      toast.success(`Invite created for ${inviteForm.email}`);
-      setInviteForm({ email: "", role: "CASE_WORKER" });
-      const res = await api.get("/invites"); setInvites(res.data);
+      const { data } = await api.post("/admin/invitations", inviteForm);
+      toast.success(`Invitation sent to ${inviteForm.email}`);
+      setInviteForm({ email: "", name: "", role: "CASE_WORKER", expiry_hours: 48 });
+      setShowInvite(false);
+      const res = await api.get("/admin/invitations"); setInvites(res.data);
     } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
     finally { setInviting(false); }
   };
@@ -167,22 +174,22 @@ export default function AdminSettings() {
   return (
     <div className="space-y-6" data-testid="admin-settings-page">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">Admin Settings</h1>
-        <p className="text-sm text-[#9CA3AF] mt-1">Manage your organization's configuration</p>
+        <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">{t("settings.title")}</h1>
+        <p className="text-sm text-[#9CA3AF] mt-1">{t("settings.subtitle")}</p>
       </div>
 
       <Tabs defaultValue="users" className="w-full">
         <TabsList className="bg-white border border-[#E8E8E8] p-1 rounded-xl" data-testid="admin-tabs">
-          <TabsTrigger value="users" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">Users</TabsTrigger>
-          <TabsTrigger value="invites" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">Invites</TabsTrigger>
-          <TabsTrigger value="vocabulary" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">Vocabulary</TabsTrigger>
-          <TabsTrigger value="fields" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">Field Sets</TabsTrigger>
-          <TabsTrigger value="demo" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">Demo Mode</TabsTrigger>
+          <TabsTrigger value="users" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">{t("settings.users")}</TabsTrigger>
+          <TabsTrigger value="invites" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">{t("settings.invites")}</TabsTrigger>
+          <TabsTrigger value="vocabulary" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">{t("settings.vocabulary")}</TabsTrigger>
+          <TabsTrigger value="fields" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">{t("settings.fieldSets")}</TabsTrigger>
+          <TabsTrigger value="demo" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">{t("settings.demoData")}</TabsTrigger>
           <TabsTrigger value="permissions" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">
-            <Shield className="h-3.5 w-3.5 mr-1" />Permissions
+            <Shield className="h-3.5 w-3.5 mr-1" />{t("settings.permissions")}
           </TabsTrigger>
           <TabsTrigger value="email" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F97316] data-[state=active]:to-[#FB923C] data-[state=active]:text-white rounded-lg text-[#6B7280] text-sm font-semibold">
-            <Mail className="h-3.5 w-3.5 mr-1" />Email
+            <Mail className="h-3.5 w-3.5 mr-1" />{t("settings.emailSettings")}
           </TabsTrigger>
         </TabsList>
 
@@ -546,8 +553,18 @@ export default function AdminSettings() {
       {/* Invite Dialog */}
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
         <DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] rounded-2xl" data-testid="invite-dialog">
-          <DialogHeader><DialogTitle className="font-['Nunito'] font-bold">Invite Team Member</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="font-['Nunito'] font-bold">Invite Team Member</DialogTitle>
+            <DialogDescription className="text-sm text-[#9CA3AF]">
+              Send an email invitation to a new team member. They'll receive a link to create their account.
+            </DialogDescription>
+          </DialogHeader>
           <form onSubmit={handleInvite} className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-[#6B7280] text-xs uppercase font-bold">Full Name *</Label>
+              <Input type="text" value={inviteForm.name} onChange={(e) => setInviteForm({...inviteForm, name: e.target.value})} required placeholder="John Doe"
+                className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="invite-name-input" />
+            </div>
             <div className="space-y-2">
               <Label className="text-[#6B7280] text-xs uppercase font-bold">Email *</Label>
               <Input type="email" value={inviteForm.email} onChange={(e) => setInviteForm({...inviteForm, email: e.target.value})} required placeholder="colleague@example.org"
@@ -564,9 +581,14 @@ export default function AdminSettings() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label className="text-[#6B7280] text-xs uppercase font-bold">Expires In (hours)</Label>
+              <Input type="number" value={inviteForm.expiry_hours} onChange={(e) => setInviteForm({...inviteForm, expiry_hours: parseInt(e.target.value) || 48})} min="1" max="168"
+                className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" />
+            </div>
             {shareableLink && (
               <div className="p-4 bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl space-y-3" data-testid="shareable-link-result">
-                <div className="flex items-center gap-2 text-sm text-[#10B981] font-bold"><Link className="h-4 w-4" /> Invite link created!</div>
+                <div className="flex items-center gap-2 text-sm text-[#10B981] font-bold"><Mail className="h-4 w-4" /> Invitation email sent!</div>
                 <div className="flex items-center gap-2">
                   <input type="text" readOnly value={shareableLink.shareable_url} className="flex-1 bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-xs text-[#6B7280] font-mono truncate" data-testid="shareable-link-url" />
                   <Button type="button" size="sm" onClick={handleCopyLink} className={`gap-1 rounded-lg ${copied ? "bg-[#10B981] text-white" : "bg-[#E5E7EB] text-[#6B7280] hover:bg-[#D1D5DB]"}`} data-testid="copy-link-btn">

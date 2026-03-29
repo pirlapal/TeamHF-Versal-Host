@@ -73,6 +73,33 @@ async def update_payment_request(request_id: str, request: Request):
                 f"Payment received: ${req.get('amount', 0):.2f}", f"Payment from {req.get('client_name', 'Unknown')} marked as paid", "/payments")
     return {"message": "Payment request updated"}
 
+@router.post("/payments/requests/{request_id}/reminder")
+async def send_payment_reminder(request_id: str, request: Request):
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    tid = user.get("tenant_id")
+    # Get payment request
+    req = await db.payment_requests.find_one({"_id": ObjectId(request_id), "tenant_id": tid})
+    if not req:
+        raise HTTPException(status_code=404, detail="Payment request not found")
+    # Send reminder email
+    from helpers import send_email, build_email_html
+    html = build_email_html(
+        "Payment Reminder",
+        f"This is a reminder about your payment request from {user.get('name', 'HackForge')}.<br><br>"
+        f"<strong>Amount:</strong> ${req.get('amount', 0):.2f}<br>"
+        f"<strong>Description:</strong> {req.get('description', 'N/A')}<br>"
+        f"<strong>Due Date:</strong> {req.get('due_date', 'N/A')}<br>"
+        f"<strong>Status:</strong> {req.get('status', 'PENDING')}<br><br>"
+        f"Please complete this payment at your earliest convenience.",
+    )
+    send_email(req.get('client_email'), f"Payment Reminder: ${req.get('amount', 0):.2f}", html)
+    # Update last reminder sent timestamp
+    await db.payment_requests.update_one(
+        {"_id": ObjectId(request_id)},
+        {"$set": {"last_reminder_sent": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "Reminder sent successfully"}
+
 @router.get("/payments/history")
 async def payment_history(request: Request):
     user = await get_current_user(request)

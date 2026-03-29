@@ -8,6 +8,18 @@ from models.notifications import MessageCreate, MessageReply
 
 router = APIRouter()
 
+@router.get("/messages/users")
+async def list_users_for_messaging(request: Request):
+    """Get list of users in the same tenant for sending messages"""
+    user = await require_role(request, ["ADMIN", "CASE_WORKER"])
+    tid = user.get("tenant_id")
+    # Get all users in the same tenant except the current user
+    users = await db.users.find(
+        {"tenant_id": tid, "_id": {"$ne": ObjectId(user["id"])}},
+        {"password_hash": 0}
+    ).to_list(100)
+    return [serialize_doc(u) for u in users]
+
 @router.get("/messages")
 async def list_messages(request: Request):
     user = await get_current_user(request)

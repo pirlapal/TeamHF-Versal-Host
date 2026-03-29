@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from bson import ObjectId
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from config import db
 from helpers import get_current_user, require_role, serialize_doc, send_notification_email
@@ -9,9 +9,23 @@ from models.services import VisitCreate, VisitUpdate
 router = APIRouter()
 
 @router.get("/visits")
-async def list_visits(request: Request, from_date: str = "", to_date: str = ""):
+async def list_visits(request: Request, from_date: str = "", to_date: str = "", time_range: str = Query(default="all", alias="range")):
     user = await get_current_user(request)
     query = {"tenant_id": user.get("tenant_id")}
+
+    # If time_range is specified, calculate from_date automatically
+    if time_range and time_range != "all":
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        if time_range == "week":
+            from_date = (now - timedelta(days=7)).isoformat()
+        elif time_range == "quarter":
+            from_date = (now - timedelta(days=90)).isoformat()
+        elif time_range == "year":
+            from_date = (now - timedelta(days=365)).isoformat()
+        else:  # month
+            from_date = (now - timedelta(days=30)).isoformat()
+
     if from_date:
         query["date"] = {"$gte": from_date}
     if to_date:

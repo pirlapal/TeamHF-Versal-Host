@@ -30,6 +30,7 @@ services:
     environment:
       MONGO_URL: mongodb://mongodb:27017
       DB_NAME: hackforge
+      FRONTEND_URL: http://localhost:3001
 
   frontend:
     build:
@@ -38,6 +39,9 @@ services:
       target: frontend
       args:
         REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost}
+        REACT_APP_EMAILJS_SERVICE_ID: ${REACT_APP_EMAILJS_SERVICE_ID:-service_g0yq4qg}
+        REACT_APP_EMAILJS_TEMPLATE_ID: ${REACT_APP_EMAILJS_TEMPLATE_ID:-template_wp63bpe}
+        REACT_APP_EMAILJS_PUBLIC_KEY: ${REACT_APP_EMAILJS_PUBLIC_KEY:-kkB5lP8Fm-9ihoZnF}
     restart: unless-stopped
     ports:
       - "80:80"

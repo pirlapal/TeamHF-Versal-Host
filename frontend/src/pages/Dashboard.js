@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
@@ -12,21 +13,24 @@ import {
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [stats, setStats] = useState({});
   const [trends, setTrends] = useState([]);
   const [outcomeStats, setOutcomeStats] = useState([]);
   const [activity, setActivity] = useState({});
   const [demographics, setDemographics] = useState([]);
+  const [timeRange, setTimeRange] = useState("all");
 
   useEffect(() => {
     const fetch = async () => {
       try {
+        const rangeParam = timeRange === "all" ? "" : `?range=${timeRange}`;
         const [s, t, o, a, d] = await Promise.all([
-          api.get("/dashboard/stats"),
-          api.get("/dashboard/trends?range=month"),
-          api.get("/dashboard/outcomes"),
-          api.get("/dashboard/activity"),
-          api.get("/dashboard/demographics"),
+          api.get(`/dashboard/stats${rangeParam}`),
+          api.get(`/dashboard/trends${rangeParam || "?range=month"}`),
+          api.get(`/dashboard/outcomes${rangeParam}`),
+          api.get(`/dashboard/activity${rangeParam}`),
+          api.get(`/dashboard/demographics${rangeParam}`),
         ]);
         setStats(s.data);
         setTrends(t.data);
@@ -36,13 +40,13 @@ export default function Dashboard() {
       } catch {}
     };
     fetch();
-  }, []);
+  }, [timeRange]);
 
   const STAT_CARDS = [
-    { label: "Clients", value: stats.client_count || 0, icon: Users, color: "#F97316", bg: "#FFF7ED" },
-    { label: "Services", value: stats.service_count || 0, icon: Briefcase, color: "#14B8A6", bg: "#F0FDFA" },
-    { label: "Visits", value: stats.visit_count || 0, icon: Calendar, color: "#6366F1", bg: "#EEF2FF" },
-    { label: "Outcomes", value: stats.outcome_count || 0, icon: Target, color: "#10B981", bg: "#ECFDF5" },
+    { label: t("dashboard.clients"), value: stats.client_count || 0, icon: Users, color: "#F97316", bg: "#FFF7ED" },
+    { label: t("dashboard.services"), value: stats.service_count || 0, icon: Briefcase, color: "#14B8A6", bg: "#F0FDFA" },
+    { label: t("dashboard.visits"), value: stats.visit_count || 0, icon: Calendar, color: "#6366F1", bg: "#EEF2FF" },
+    { label: t("dashboard.outcomes"), value: stats.outcome_count || 0, icon: Target, color: "#10B981", bg: "#ECFDF5" },
   ];
 
   const OUTCOME_COLORS = { "ACHIEVED": "#10B981", "IN_PROGRESS": "#F59E0B", "NOT_STARTED": "#9CA3AF", "NOT_ACHIEVED": "#EF4444" };
@@ -53,14 +57,14 @@ export default function Dashboard() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">
-            Welcome back, {user?.name?.split(" ")[0]}
+            {t("dashboard.welcome", { name: user?.name?.split(" ")[0] || "" })}
           </h1>
-          <p className="text-sm text-[#9CA3AF] mt-1">Here's what's happening today</p>
+          <p className="text-sm text-[#9CA3AF] mt-1">{t("dashboard.happening")}</p>
         </div>
         <div className="flex items-center gap-3">
           {stats.pending_count > 0 && (
             <Badge variant="outline" className="border-[#FDE68A] text-[#F59E0B] bg-[#FFFBEB] text-xs rounded-full gap-1 px-3" data-testid="pending-badge">
-              <Clock className="h-3 w-3" /> {stats.pending_count} pending approvals
+              <Clock className="h-3 w-3" /> {stats.pending_count} {t("dashboard.pendingApprovals")}
             </Badge>
           )}
           {user?.role === "ADMIN" && (
@@ -75,10 +79,34 @@ export default function Dashboard() {
                 URL.revokeObjectURL(link.href);
               } catch {}
             }} className="border-[#E5E7EB] text-[#6B7280] rounded-lg gap-1.5 text-xs h-8 hover:border-[#F97316] hover:text-[#F97316]" data-testid="dashboard-csv-export">
-              <FileDown className="h-3.5 w-3.5" /> Export CSV
+              <FileDown className="h-3.5 w-3.5" /> {t("dashboard.exportCSV")}
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Time Range Filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold text-[#6B7280] mr-1">{t("dashboard.timePeriod")}</span>
+        {[
+          { label: t("dashboard.allTime"), value: "all" },
+          { label: t("dashboard.thisWeek"), value: "week" },
+          { label: t("dashboard.thisMonth"), value: "month" },
+          { label: t("dashboard.lastQuarter"), value: "quarter" },
+          { label: t("dashboard.lastYear"), value: "year" },
+        ].map((range) => (
+          <button
+            key={range.value}
+            onClick={() => setTimeRange(range.value)}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              timeRange === range.value
+                ? "bg-[#F97316] text-white shadow-sm"
+                : "bg-white text-[#6B7280] border border-[#E8E8E8] hover:border-[#F97316] hover:text-[#F97316]"
+            }`}
+          >
+            {range.label}
+          </button>
+        ))}
       </div>
 
       {/* Stat Cards */}
@@ -126,41 +154,43 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Activity Trend Chart */}
-        <div className="bg-white border border-[#E8E8E8] rounded-xl p-5" data-testid="trend-chart">
+        {/* Recent Activity Feed */}
+        <div className="bg-white border border-[#E8E8E8] rounded-xl p-5" data-testid="activity-feed">
           <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="h-4 w-4 text-[#F97316]" />
-            <span className="text-sm font-bold font-['Nunito'] text-[#1F2937]">Activity Trend (30 days)</span>
+            <Clock className="h-4 w-4 text-[#F97316]" />
+            <span className="text-sm font-bold font-['Nunito'] text-[#1F2937]">{t("dashboard.recentActivity")}</span>
           </div>
-          {trends.length > 0 ? (
-            <>
-              <div className="flex items-end gap-1 h-32">
-                {trends.slice(-30).map((t, i) => {
-                  const max = Math.max(...trends.map(d => d.service_count + d.visit_count), 1);
-                  const val = t.service_count + t.visit_count;
-                  const pct = max > 0 ? (val / max) * 100 : 0;
-                  return (
-                    <div key={i} className="flex-1 flex flex-col items-center justify-end gap-0.5 group" title={`${t.date}: ${val} activities`}>
-                      <span className="text-[8px] text-[#9CA3AF] opacity-0 group-hover:opacity-100 transition-opacity mb-auto">{val}</span>
-                      <div className="w-full rounded-t transition-all duration-300" style={{
-                        height: val > 0 ? `${Math.max(pct, 10)}%` : "2px",
-                        backgroundColor: val > 0 ? "#F97316" : "#F3F4F6",
-                        opacity: val > 0 ? 1 : 0.4,
-                      }} />
-                    </div>
-                  );
-                })}
+          <div className="space-y-3 max-h-80 overflow-y-auto">
+            {activity.recent_clients?.slice(0, 3).map((client) => (
+              <div key={client.id} className="flex items-start gap-3 p-3 bg-[#FFF7ED] rounded-lg border border-[#FED7AA] hover:shadow-sm transition-shadow cursor-pointer" onClick={() => navigate(`/clients/${client.id}`)}>
+                <div className="w-8 h-8 rounded-full bg-[#F97316] flex items-center justify-center flex-shrink-0">
+                  <UserPlus className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[#1F2937] truncate">{client.name}</p>
+                  <p className="text-xs text-[#6B7280]">{t("dashboard.newClientAdded")}</p>
+                  <p className="text-xs text-[#9CA3AF] mt-0.5">{new Date(client.created_at).toLocaleDateString()}</p>
+                </div>
               </div>
-              <div className="flex justify-between mt-2">
-                <span className="text-[8px] text-[#D1D5DB] font-mono">{trends[0]?.date?.slice(5) || ''}</span>
-                <span className="text-[8px] text-[#D1D5DB] font-mono">{trends[trends.length - 1]?.date?.slice(5) || ''}</span>
+            ))}
+            {activity.upcoming_visits?.slice(0, 3).map((visit) => (
+              <div key={visit.id} className="flex items-start gap-3 p-3 bg-[#EEF2FF] rounded-lg border border-[#C7D2FE] hover:shadow-sm transition-shadow cursor-pointer" onClick={() => navigate('/calendar')}>
+                <div className="w-8 h-8 rounded-full bg-[#6366F1] flex items-center justify-center flex-shrink-0">
+                  <Calendar className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[#1F2937] truncate">{visit.client_name}</p>
+                  <p className="text-xs text-[#6B7280]">{t("dashboard.upcomingVisit")} • {visit.duration} min</p>
+                  <p className="text-xs text-[#9CA3AF] mt-0.5">{new Date(visit.date).toLocaleDateString()}</p>
+                </div>
               </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-center h-32">
-              <p className="text-xs text-[#9CA3AF]">Loading activity data...</p>
-            </div>
-          )}
+            ))}
+            {(!activity.recent_clients?.length && !activity.upcoming_visits?.length) && (
+              <div className="flex items-center justify-center h-32">
+                <p className="text-xs text-[#9CA3AF]">{t("dashboard.noActivity")}</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Outcome Distribution */}

@@ -58,13 +58,13 @@ async def seed_demo_data(request: Request):
         cid = str(result.inserted_id)
         created_clients.append(cid)
         for _ in range(random.randint(1, 5)):
-            svc_date = (now - timedelta(days=random.randint(1, 60))).strftime("%Y-%m-%d")
+            svc_date = (now - timedelta(days=random.randint(1, 28))).strftime("%Y-%m-%d")
             await db.service_logs.insert_one({
                 "client_id": cid, "tenant_id": tid, "service_date": svc_date,
                 "service_type": random.choice(DEMO_SERVICES),
                 "provider_name": f"Dr. {random.choice(['Smith','Jones','Lee','Williams','Martinez'])}",
                 "notes": "Demo service log entry.", "created_by": user["id"],
-                "created_at": (now - timedelta(days=random.randint(1, 60))).isoformat(),
+                "created_at": (now - timedelta(days=random.randint(1, 28))).isoformat(),
             })
         for _ in range(random.randint(0, 3)):
             target = (now + timedelta(days=random.randint(30, 180))).strftime("%Y-%m-%d")
@@ -75,7 +75,7 @@ async def seed_demo_data(request: Request):
                 "created_by": user["id"], "created_at": now.isoformat(),
             })
         for _ in range(random.randint(0, 3)):
-            visit_date = (now + timedelta(days=random.randint(-30, 30))).isoformat()
+            visit_date = (now + timedelta(days=random.randint(-28, 2))).isoformat()
             await db.visits.insert_one({
                 "client_id": cid, "tenant_id": tid, "date": visit_date,
                 "duration": random.choice([30, 45, 60, 90]), "notes": "Demo visit.",

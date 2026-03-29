@@ -21,7 +21,11 @@ export default function InviteAccept() {
 
   useEffect(() => {
     const fetchInvite = async () => {
-      try { const { data } = await api.get(`/invites/${token}`); setInvite(data); }
+      try {
+        const { data } = await api.get(`/invitations/validate/${token}`);
+        setInvite({ ...data, organization: "HackForge" });
+        setForm({ ...form, name: data.name }); // Pre-fill name from invitation
+      }
       catch (err) { setError(formatApiError(err.response?.data?.detail) || "Invalid or expired invite link"); }
       finally { setLoading(false); }
     };
@@ -33,11 +37,9 @@ export default function InviteAccept() {
     if (form.password.length < 8) { setError("Password must be at least 8 characters"); return; }
     setSubmitting(true); setError("");
     try {
-      const { data } = await api.post(`/invites/${token}/accept`, form);
-      if (data.access_token) localStorage.setItem("access_token", data.access_token);
-      await checkAuth();
-      toast.success("Welcome to the team!");
-      navigate("/dashboard");
+      await api.post(`/invitations/accept`, { token, password: form.password });
+      toast.success("Account created successfully! Please log in.");
+      navigate("/login");
     } catch (err) { setError(formatApiError(err.response?.data?.detail)); }
     finally { setSubmitting(false); }
   };

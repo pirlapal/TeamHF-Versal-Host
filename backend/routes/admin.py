@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Request, HTTPException
 from bson import ObjectId
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import secrets
+import asyncio
 
 from config import db, logger
 from helpers import get_current_user, require_role, serialize_doc
 from models.admin import VocabularyUpdate, FieldSetUpdate
 from helpers import DEFAULT_PERMISSIONS, ALL_PERMISSIONS, get_user_permissions
+from email_notifications import send_user_invitation_email
 
 router = APIRouter()
 
@@ -161,3 +164,166 @@ async def get_email_settings(request: Request):
         "sendgrid_configured": bool(SENDGRID_API_KEY),
         "sender_email": SENDER_EMAIL if SENDGRID_API_KEY else None,
     }
+
+# ── User Invitations ──
+@router.post("/admin/invitations")
+async def send_invitation(request: Request):
+    """Send email invitation to a new user"""
+    admin = await require_role(request, ["ADMIN"])
+    body = await request.json()
+
+    email = body.get("email", "").strip()
+    name = body.get("name", "").strip()
+    role = body.get("role", "CASE_WORKER")
+    expiry_hours = body.get("expiry_hours", 48)
+
+    if not email or not name:
+        raise HTTPException(status_code=400, detail="Email and name are required")
+
+    # Check if user already exists
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+
+    # Check for existing pending invitation
+    existing_invite = await db.invitations.find_one({"email": email, "status": "PENDING"})
+    if existing_invite:
+        raise HTTPException(status_code=400, detail="Pending invitation already exists for this email")
+
+    # Generate unique invitation token
+    invite_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=expiry_hours)
+
+    # Store invitation in database
+    invitation_doc = {
+        "email": email,
+        "name": name,
+        "role": role,
+        "token": invite_token,
+        "tenant_id": admin.get("tenant_id"),
+        "invited_by": admin["id"],
+        "invited_by_name": admin.get("name", "Admin"),
+        "status": "PENDING",
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    result = await db.invitations.insert_one(invitation_doc)
+    invitation_doc["id"] = str(result.inserted_id)
+    invitation_doc.pop("_id", None)
+
+    # Send invitation email asynchronously
+    asyncio.create_task(send_user_invitation_email(
+        invite_email=email,
+        user_name=name,
+        role=role,
+        invite_token=invite_token,
+        expiry_hours=expiry_hours
+    ))
+
+    return {"message": f"Invitation sent to {email}", "invitation": serialize_doc(invitation_doc)}
+
+@router.get("/admin/invitations")
+async def list_invitations(request: Request):
+    """List all invitations for the admin's tenant"""
+    admin = await require_role(request, ["ADMIN"])
+    invitations = await db.invitations.find(
+        {"tenant_id": admin.get("tenant_id")}
+    ).sort("created_at", -1).to_list(100)
+    return [serialize_doc(inv) for inv in invitations]
+
+@router.delete("/admin/invitations/{invitation_id}")
+async def cancel_invitation(invitation_id: str, request: Request):
+    """Cancel a pending invitation"""
+    admin = await require_role(request, ["ADMIN"])
+    result = await db.invitations.update_one(
+        {"_id": ObjectId(invitation_id), "tenant_id": admin.get("tenant_id")},
+        {"$set": {"status": "CANCELLED", "cancelled_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    return {"message": "Invitation cancelled"}
+
+# ── Public Invitation Endpoints (no auth required) ──
+@router.get("/invitations/validate/{token}")
+async def validate_invitation(token: str):
+    """Validate an invitation token (public endpoint)"""
+    invitation = await db.invitations.find_one({"token": token, "status": "PENDING"})
+
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invalid or expired invitation")
+
+    # Check if expired
+    expires_at = datetime.fromisoformat(invitation["expires_at"])
+    if datetime.now(timezone.utc) > expires_at:
+        await db.invitations.update_one(
+            {"_id": invitation["_id"]},
+            {"$set": {"status": "EXPIRED"}}
+        )
+        raise HTTPException(status_code=400, detail="Invitation has expired")
+
+    return {
+        "email": invitation["email"],
+        "name": invitation["name"],
+        "role": invitation["role"],
+        "invited_by": invitation.get("invited_by_name", "Admin"),
+        "expires_at": invitation["expires_at"],
+    }
+
+@router.post("/invitations/accept")
+async def accept_invitation(request: Request):
+    """Accept invitation and create user account (public endpoint)"""
+    body = await request.json()
+    token = body.get("token")
+    password = body.get("password")
+
+    if not token or not password:
+        raise HTTPException(status_code=400, detail="Token and password are required")
+
+    # Validate invitation
+    invitation = await db.invitations.find_one({"token": token, "status": "PENDING"})
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invalid or expired invitation")
+
+    # Check if expired
+    expires_at = datetime.fromisoformat(invitation["expires_at"])
+    if datetime.now(timezone.utc) > expires_at:
+        await db.invitations.update_one(
+            {"_id": invitation["_id"]},
+            {"$set": {"status": "EXPIRED"}}
+        )
+        raise HTTPException(status_code=400, detail="Invitation has expired")
+
+    # Check if user already exists
+    existing = await db.users.find_one({"email": invitation["email"]})
+    if existing:
+        raise HTTPException(status_code=400, detail="User already exists")
+
+    # Create user account
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    hashed_password = pwd_context.hash(password)
+
+    user_doc = {
+        "email": invitation["email"],
+        "name": invitation["name"],
+        "role": invitation["role"],
+        "tenant_id": invitation["tenant_id"],
+        "password_hash": hashed_password,
+        "status": "ACTIVE",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    result = await db.users.insert_one(user_doc)
+    user_doc["id"] = str(result.inserted_id)
+    user_doc.pop("_id", None)
+    user_doc.pop("password_hash", None)
+
+    # Mark invitation as accepted
+    await db.invitations.update_one(
+        {"_id": invitation["_id"]},
+        {"$set": {"status": "ACCEPTED", "accepted_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    return {"message": "Account created successfully", "user": user_doc}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -12,14 +13,15 @@ import {
 import { toast } from "sonner";
 
 const REPORT_TYPES = [
-  { id: "services", label: "Services", icon: Briefcase, color: "#F97316", bg: "#FFF7ED" },
-  { id: "visits", label: "Visits", icon: CalendarDays, color: "#6366F1", bg: "#EEF2FF" },
-  { id: "outcomes", label: "Outcomes", icon: Target, color: "#14B8A6", bg: "#F0FDFA" },
-  { id: "payments", label: "Payments", icon: DollarSign, color: "#10B981", bg: "#ECFDF5" },
+  { id: "services", labelKey: "reports.services", icon: Briefcase, color: "#F97316", bg: "#FFF7ED" },
+  { id: "visits", labelKey: "reports.visits", icon: CalendarDays, color: "#6366F1", bg: "#EEF2FF" },
+  { id: "outcomes", labelKey: "reports.outcomes", icon: Target, color: "#14B8A6", bg: "#F0FDFA" },
+  { id: "payments", labelKey: "reports.payments", icon: DollarSign, color: "#10B981", bg: "#ECFDF5" },
 ];
 
 export default function Reports() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [outcomeStats, setOutcomeStats] = useState([]);
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState("");
@@ -102,8 +104,8 @@ export default function Reports() {
   return (
     <div className="space-y-6" data-testid="reports-page">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">Reports & Export</h1>
-        <p className="text-sm text-[#9CA3AF] mt-1">Generate PDF reports and export data as CSV</p>
+        <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">{t("reports.title")}</h1>
+        <p className="text-sm text-[#9CA3AF] mt-1">{t("reports.subtitle")}</p>
       </div>
 
       {/* PDF Reports */}
@@ -115,15 +117,15 @@ export default function Reports() {
               <BarChart3 className="h-5 w-5 text-[#F97316]" />
             </div>
             <div>
-              <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937]">Organization Report</h3>
-              <p className="text-xs text-[#9CA3AF]">Full overview with stats, services, outcomes & payments</p>
+              <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937]">{t("reports.organizationReport")}</h3>
+              <p className="text-xs text-[#9CA3AF]">{t("reports.orgReportDesc")}</p>
             </div>
           </div>
           {user?.role === "ADMIN" && (
             <Button onClick={() => handlePDFExport("org")} disabled={downloading === "org"}
               className="w-full bg-gradient-to-r from-[#F97316] to-[#FB923C] hover:from-[#EA580C] hover:to-[#F97316] text-white gap-2 rounded-lg font-bold shadow-md shadow-orange-200"
               data-testid="download-org-pdf">
-              {downloading === "org" ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><FileDown className="h-4 w-4" /> Download PDF</>}
+              {downloading === "org" ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><FileDown className="h-4 w-4" /> {t("reports.downloadPDF")}</>}
             </Button>
           )}
         </div>
@@ -135,13 +137,13 @@ export default function Reports() {
               <Users className="h-5 w-5 text-[#14B8A6]" />
             </div>
             <div>
-              <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937]">Client Report</h3>
-              <p className="text-xs text-[#9CA3AF]">Individual client PDF with services, visits & outcomes</p>
+              <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937]">{t("reports.clientReport")}</h3>
+              <p className="text-xs text-[#9CA3AF]">{t("reports.clientReportDesc")}</p>
             </div>
           </div>
           <Select value={selectedClient} onValueChange={setSelectedClient}>
             <SelectTrigger className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="select-client-report">
-              <SelectValue placeholder="Select a client" />
+              <SelectValue placeholder={t("reports.selectClient")} />
             </SelectTrigger>
             <SelectContent className="bg-white border-[#E8E8E8] rounded-xl max-h-56">
               {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -150,7 +152,7 @@ export default function Reports() {
           <Button onClick={() => handlePDFExport("client", selectedClient)} disabled={!selectedClient || downloading === "client"}
             className="w-full bg-gradient-to-r from-[#14B8A6] to-[#2DD4BF] hover:from-[#0D9488] hover:to-[#14B8A6] text-white gap-2 rounded-lg font-bold shadow-md shadow-teal-200"
             data-testid="download-client-pdf">
-            {downloading === "client" ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><FileDown className="h-4 w-4" /> Download Client PDF</>}
+            {downloading === "client" ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><FileDown className="h-4 w-4" /> {t("reports.downloadClientPDF")}</>}
           </Button>
         </div>
       </div>
@@ -158,7 +160,7 @@ export default function Reports() {
       {/* Outcome Tracking Chart */}
       {totalOutcomes > 0 && (
         <div className="bg-white border border-[#E8E8E8] rounded-xl p-6" data-testid="outcome-chart">
-          <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937] mb-4">Outcome Tracking</h3>
+          <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937] mb-4">{t("reports.outcomeTracking")}</h3>
           <div className="flex items-center gap-3 mb-4">
             {outcomeStats.map((o) => (
               <div key={o.status} className="flex items-center gap-2 text-xs">
@@ -191,8 +193,8 @@ export default function Reports() {
               <Sparkles className="h-5 w-5 text-[#8B5CF6]" />
             </div>
             <div>
-              <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937]">AI Narrative Reports</h3>
-              <p className="text-xs text-[#9CA3AF]">Generate AI-powered case narrative summaries for selected or all clients</p>
+              <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937]">{t("reports.aiNarrativeReports")}</h3>
+              <p className="text-xs text-[#9CA3AF]">{t("reports.aiNarrativeDesc")}</p>
             </div>
           </div>
 
@@ -200,14 +202,14 @@ export default function Reports() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <Checkbox id="all-clients" checked={narrativeAll} onCheckedChange={(v) => { setNarrativeAll(!!v); if (v) setSelectedNarrativeClients([]); }} data-testid="narrative-all-toggle" />
-                <label htmlFor="all-clients" className="text-sm font-semibold text-[#1F2937] cursor-pointer">All Clients</label>
+                <label htmlFor="all-clients" className="text-sm font-semibold text-[#1F2937] cursor-pointer">{t("reports.allClients")}</label>
               </div>
-              <span className="text-xs text-[#9CA3AF]">or select specific clients below</span>
+              <span className="text-xs text-[#9CA3AF]">{t("reports.orSelectClients")}</span>
             </div>
 
             {!narrativeAll && (
               <div className="border border-[#E5E7EB] rounded-lg p-3 max-h-48 overflow-y-auto space-y-1" data-testid="narrative-client-list">
-                {clients.length === 0 && <p className="text-xs text-[#9CA3AF]">No clients found</p>}
+                {clients.length === 0 && <p className="text-xs text-[#9CA3AF]">{t("reports.noClients")}</p>}
                 {clients.map((c) => (
                   <div key={c.id} className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-[#FAFAF8] transition-colors">
                     <Checkbox id={`nc-${c.id}`} checked={selectedNarrativeClients.includes(c.id)}
@@ -216,7 +218,7 @@ export default function Reports() {
                   </div>
                 ))}
                 {selectedNarrativeClients.length > 0 && (
-                  <p className="text-xs font-semibold text-[#8B5CF6] pt-1">{selectedNarrativeClients.length} client(s) selected</p>
+                  <p className="text-xs font-semibold text-[#8B5CF6] pt-1">{selectedNarrativeClients.length} {t("reports.clientsSelected")}</p>
                 )}
               </div>
             )}
@@ -224,7 +226,7 @@ export default function Reports() {
             <Button onClick={handleNarrativeReport} disabled={generatingNarrative || (!narrativeAll && selectedNarrativeClients.length === 0)}
               className="bg-gradient-to-r from-[#8B5CF6] to-[#A78BFA] hover:from-[#7C3AED] hover:to-[#8B5CF6] text-white gap-2 rounded-lg font-bold shadow-md shadow-purple-200"
               data-testid="generate-narrative-btn">
-              {generatingNarrative ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <><Sparkles className="h-4 w-4" /> Generate Narrative Report</>}
+              {generatingNarrative ? <><Loader2 className="h-4 w-4 animate-spin" /> {t("reports.generating")}</> : <><Sparkles className="h-4 w-4" /> {t("reports.generateNarrative")}</>}
             </Button>
           </div>
 
@@ -232,7 +234,7 @@ export default function Reports() {
           {narrativeResult && (
             <div className="space-y-3 mt-4" data-testid="narrative-results">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-[#1F2937]">{narrativeResult.total_clients} Narrative(s) Generated</p>
+                <p className="text-sm font-bold text-[#1F2937]">{narrativeResult.total_clients} {t("reports.narrativesGenerated")}</p>
                 <span className="text-[10px] text-[#9CA3AF]">{new Date(narrativeResult.generated_at).toLocaleString()}</span>
               </div>
               {narrativeResult.narratives.map((n) => (
@@ -255,7 +257,7 @@ export default function Reports() {
 
       {/* CSV Exports */}
       <div>
-        <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937] mb-3">CSV Exports</h3>
+        <h3 className="text-base font-bold font-['Nunito'] text-[#1F2937] mb-3">{t("reports.csvExports")}</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {/* Clients export */}
           <button onClick={() => handleCSVExport("clients")} disabled={downloading === "clients"}
@@ -264,7 +266,7 @@ export default function Reports() {
             <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#EEF2FF" }}>
               <Users className="h-4 w-4" style={{ color: "#6366F1" }} />
             </div>
-            <span className="text-xs font-bold text-[#1F2937]">Clients</span>
+            <span className="text-xs font-bold text-[#1F2937]">{t("reports.clients")}</span>
             <Badge variant="outline" className="border-[#E5E7EB] text-[#9CA3AF] text-[9px] rounded-full">CSV</Badge>
           </button>
           {REPORT_TYPES.map((rt) => {
@@ -276,7 +278,7 @@ export default function Reports() {
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: rt.bg }}>
                   <Icon className="h-4 w-4" style={{ color: rt.color }} />
                 </div>
-                <span className="text-xs font-bold text-[#1F2937]">{rt.label}</span>
+                <span className="text-xs font-bold text-[#1F2937]">{t(rt.labelKey)}</span>
                 <Badge variant="outline" className="border-[#E5E7EB] text-[#9CA3AF] text-[9px] rounded-full">CSV</Badge>
               </button>
             );

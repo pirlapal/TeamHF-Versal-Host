@@ -16,6 +16,7 @@ import {
   ChevronLeft, ChevronRight, Check, ArrowLeft
 } from "lucide-react";
 import { toast } from "sonner";
+import { sendClientOnboardingNotification } from "@/lib/emailService";
 
 const STEPS = [
   { id: "personal", label: "Personal Info", icon: User },

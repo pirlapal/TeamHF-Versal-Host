@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import api from "@/lib/api";
 import { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -18,6 +19,7 @@ const STATUS_ICONS = { SCHEDULED: Clock, COMPLETED: CheckCircle, CANCELLED: XCir
 
 export default function CalendarPage() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [visits, setVisits] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,11 +27,27 @@ export default function CalendarPage() {
   const [form, setForm] = useState({ client_id: "", date: "", duration: 60, notes: "" });
   const [creating, setCreating] = useState(false);
   const [conflictWarning, setConflictWarning] = useState(null);
+  const [timeRange, setTimeRange] = useState("all");
 
   useEffect(() => {
-    const fetchData = async () => { setLoading(true); try { const [v, c] = await Promise.all([api.get("/visits"), api.get("/clients", { params: { page_size: 100 } })]); setVisits(v.data); setClients(c.data?.data || []); } catch (err) { console.error(err); } finally { setLoading(false); } };
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const rangeParam = timeRange === "all" ? "" : `?range=${timeRange}`;
+        const [v, c] = await Promise.all([
+          api.get(`/visits${rangeParam}`),
+          api.get("/clients", { params: { page_size: 100 } })
+        ]);
+        setVisits(v.data);
+        setClients(c.data?.data || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchData();
-  }, []);
+  }, [timeRange]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -68,11 +86,36 @@ export default function CalendarPage() {
   return (
     <div className="space-y-6" data-testid="calendar-page">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div><h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">Calendar</h1><p className="text-sm text-[#9CA3AF] mt-1">{visits.length} scheduled visits</p></div>
+        <div><h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">{t("calendar.title")}</h1><p className="text-sm text-[#9CA3AF] mt-1">{visits.length} {t("calendar.scheduledVisits")}</p></div>
         {(user?.role === "ADMIN" || user?.role === "CASE_WORKER") && (
-          <Button onClick={() => setShowCreate(true)} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white gap-2 rounded-lg font-bold shadow-md shadow-orange-200" data-testid="schedule-visit-btn"><Plus className="h-4 w-4" /> Schedule Visit</Button>
+          <Button onClick={() => setShowCreate(true)} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white gap-2 rounded-lg font-bold shadow-md shadow-orange-200" data-testid="schedule-visit-btn"><Plus className="h-4 w-4" /> {t("calendar.scheduleVisit")}</Button>
         )}
       </div>
+
+      {/* Time Range Filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold text-[#6B7280] mr-1">{t("dashboard.timePeriod")}</span>
+        {[
+          { label: t("time.allTime"), value: "all" },
+          { label: t("time.thisWeek"), value: "week" },
+          { label: t("time.thisMonth"), value: "month" },
+          { label: t("time.lastQuarter"), value: "quarter" },
+          { label: t("time.lastYear"), value: "year" },
+        ].map((range) => (
+          <button
+            key={range.value}
+            onClick={() => setTimeRange(range.value)}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              timeRange === range.value
+                ? "bg-[#F97316] text-white shadow-sm"
+                : "bg-white text-[#6B7280] border border-[#E8E8E8] hover:border-[#F97316] hover:text-[#F97316]"
+            }`}
+          >
+            {range.label}
+          </button>
+        ))}
+      </div>
+
       {sortedDates.length === 0 ? (
         <div className="bg-white border border-[#E8E8E8] rounded-xl p-12 text-center" data-testid="calendar-empty"><Clock className="h-12 w-12 text-[#E5E7EB] mx-auto mb-4" /><p className="text-[#6B7280] mb-4">No visits scheduled</p><Button onClick={() => setShowCreate(true)} variant="outline" className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#FFF7ED] rounded-lg">Schedule your first visit</Button></div>
       ) : (

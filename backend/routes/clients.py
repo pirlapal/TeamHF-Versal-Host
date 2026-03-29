@@ -4,10 +4,12 @@ from datetime import datetime, timezone
 from typing import Optional
 import csv
 import io
+import asyncio
 
 from config import db
 from helpers import get_current_user, require_role, serialize_doc, send_notification_email
 from models.clients import ClientCreate, ClientUpdate, ClientWizardCreate
+from email_notifications import send_client_onboarding_email
 
 router = APIRouter()
 
@@ -92,6 +94,16 @@ async def create_client(data: ClientCreate, request: Request):
         if str(admin["_id"]) != user["id"]:
             await send_notification_email(user.get("tenant_id"), str(admin["_id"]), "client_created",
                 f"New client: {data.name}", f"{user.get('name')} added a new client", f"/clients/{client_doc['id']}")
+            # Send EmailJS notification if client is pending approval
+            if client_doc.get("pending") and admin.get("email"):
+                asyncio.create_task(send_client_onboarding_email(
+                    admin_email=admin.get("email"),
+                    admin_name=admin.get("name", "Admin"),
+                    client_name=data.name,
+                    created_by=user.get("name", "Unknown"),
+                    client_id=client_doc["id"],
+                    is_pending=True
+                ))
     return client_doc
 
 @router.get("/clients/{client_id}")
@@ -197,6 +209,16 @@ async def create_client_wizard(data: ClientWizardCreate, request: Request):
         if str(admin["_id"]) != user["id"]:
             await send_notification_email(tid, str(admin["_id"]), "client_onboarded",
                 f"Client onboarded: {name.strip()}", f"{user.get('name')} onboarded a new client via wizard", f"/clients/{cid}")
+            # Send EmailJS notification if client is pending approval
+            if client_doc.get("pending") and admin.get("email"):
+                asyncio.create_task(send_client_onboarding_email(
+                    admin_email=admin.get("email"),
+                    admin_name=admin.get("name", "Admin"),
+                    client_name=name.strip(),
+                    created_by=user.get("name", "Unknown"),
+                    client_id=cid,
+                    is_pending=True
+                ))
     return {"client": client_doc, "message": f"Client {name.strip()} onboarded successfully"}
 
 # ── CSV Import ──

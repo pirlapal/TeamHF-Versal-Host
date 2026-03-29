@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -13,9 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Plus, ChevronLeft, ChevronRight, UserCheck, Clock, Upload, Download, Users, Wand2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { formatApiError } from "@/lib/api";
+import { sendClientOnboardingNotification } from "@/lib/emailService";
 
 export default function Clients() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, total_pages: 1, total_count: 0 });
@@ -99,8 +102,8 @@ export default function Clients() {
     <div className="space-y-6" data-testid="clients-page">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">Clients</h1>
-          <p className="text-sm text-[#9CA3AF] mt-1">{pagination.total_count} total clients</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold font-['Nunito'] tracking-tight text-[#1F2937]">{t("clients.title")}</h1>
+          <p className="text-sm text-[#9CA3AF] mt-1">{pagination.total_count} {t("clients.totalClients")}</p>
         </div>
         {(role === "ADMIN" || role === "CASE_WORKER") && (
           <div className="flex items-center gap-2">
@@ -110,19 +113,19 @@ export default function Clients() {
                   <input type="file" accept=".csv" className="hidden" onChange={handleCsvImport} disabled={importing} data-testid="csv-import-input" />
                   <div className="flex items-center gap-2 px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm text-[#6B7280] hover:bg-[#FFF7ED] transition-colors h-9" data-testid="csv-import-btn">
                     {importing ? <div className="w-3.5 h-3.5 border-2 border-[#6B7280]/30 border-t-[#6B7280] rounded-full animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                    <span className="hidden sm:inline">{importing ? "Importing..." : "Import CSV"}</span>
+                    <span className="hidden sm:inline">{importing ? t("common.loading") : t("clients.importClients")}</span>
                   </div>
                 </label>
                 <Button variant="outline" size="sm" onClick={handleExport} className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#FFF7ED] gap-2 h-9 rounded-lg" data-testid="csv-export-btn">
-                  <Download className="h-3.5 w-3.5" /><span className="hidden sm:inline">Export</span>
+                  <Download className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("common.export")}</span>
                 </Button>
               </>
             )}
             <Button onClick={() => setShowCreate(true)} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] hover:from-[#EA580C] hover:to-[#F97316] text-white gap-2 rounded-lg font-bold shadow-md shadow-orange-200" data-testid="add-client-btn">
-              <Plus className="h-4 w-4" /> Add Client
+              <Plus className="h-4 w-4" /> {t("clients.addClient")}
             </Button>
             <Button onClick={() => navigate("/clients/wizard")} variant="outline" className="border-[#14B8A6] text-[#14B8A6] hover:bg-[#F0FDFA] gap-2 rounded-lg font-bold" data-testid="wizard-client-btn">
-              <Wand2 className="h-4 w-4" /> Onboard Wizard
+              <Wand2 className="h-4 w-4" /> {t("clients.onboardClient")}
             </Button>
           </div>
         )}
@@ -131,17 +134,17 @@ export default function Clients() {
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D1D5DB]" />
-          <Input placeholder="Search clients by name, email, phone..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          <Input placeholder={t("clients.searchClients")} value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-10 bg-white border-[#E5E7EB] text-[#1F2937] placeholder:text-[#D1D5DB] h-10 rounded-lg" data-testid="client-search-input" />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-32 h-10 bg-white border-[#E5E7EB] text-[#6B7280] rounded-lg text-xs" data-testid="status-filter">
-            <SelectValue placeholder="All Status" />
+            <SelectValue placeholder={t("common.all") + " " + t("common.status")} />
           </SelectTrigger>
           <SelectContent className="bg-white border-[#E8E8E8] rounded-xl">
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="all">{t("common.all")} {t("common.status")}</SelectItem>
+            <SelectItem value="active">{t("status.active")}</SelectItem>
+            <SelectItem value="pending">{t("status.pending")}</SelectItem>
           </SelectContent>
         </Select>
         <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }}
@@ -150,16 +153,16 @@ export default function Clients() {
           placeholder="To" className="w-36 h-10 bg-white border-[#E5E7EB] text-[#6B7280] rounded-lg text-xs" data-testid="date-to-filter" />
         {(statusFilter !== "all" || dateFrom || dateTo) && (
           <Button variant="ghost" size="sm" onClick={() => { setStatusFilter("all"); setDateFrom(""); setDateTo(""); setPage(1); }}
-            className="text-[#9CA3AF] text-xs h-10 rounded-lg" data-testid="clear-filters-btn">Clear filters</Button>
+            className="text-[#9CA3AF] text-xs h-10 rounded-lg" data-testid="clear-filters-btn">{t("clients.clearFilters")}</Button>
         )}
       </div>
 
       {importResult && (
         <div className="p-3 bg-white border border-[#E5E7EB] rounded-xl flex items-center justify-between" data-testid="import-result-banner">
           <span className="text-sm text-[#6B7280]">
-            Import complete: <span className="text-[#10B981] font-mono font-bold">{importResult.imported}</span> imported, <span className="text-[#F59E0B] font-mono font-bold">{importResult.skipped}</span> skipped
+            {t("clients.importComplete")} <span className="text-[#10B981] font-mono font-bold">{importResult.imported}</span> {t("clients.imported")}, <span className="text-[#F59E0B] font-mono font-bold">{importResult.skipped}</span> {t("clients.skipped")}
           </span>
-          <Button variant="ghost" size="sm" onClick={() => setImportResult(null)} className="text-[#9CA3AF] h-7">Dismiss</Button>
+          <Button variant="ghost" size="sm" onClick={() => setImportResult(null)} className="text-[#9CA3AF] h-7">{t("clients.dismiss")}</Button>
         </div>
       )}
 
@@ -168,9 +171,9 @@ export default function Clients() {
       ) : clients.length === 0 ? (
         <div className="bg-white border border-[#E8E8E8] rounded-xl p-12 text-center" data-testid="clients-empty">
           <Users className="h-12 w-12 text-[#E5E7EB] mx-auto mb-4" />
-          <p className="text-[#6B7280] mb-4">No clients found</p>
+          <p className="text-[#6B7280] mb-4">{t("clients.noClients")}</p>
           {(role === "ADMIN" || role === "CASE_WORKER") && (
-            <Button onClick={() => setShowCreate(true)} variant="outline" className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#FFF7ED] rounded-lg">Add your first client</Button>
+            <Button onClick={() => setShowCreate(true)} variant="outline" className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#FFF7ED] rounded-lg">{t("clients.addFirstClient")}</Button>
           )}
         </div>
       ) : (
@@ -178,10 +181,10 @@ export default function Clients() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[#F3F4F6]">
-                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">Name</th>
-                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF] hidden sm:table-cell">Email</th>
-                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF] hidden md:table-cell">Phone</th>
-                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">Status</th>
+                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">{t("clients.tableName")}</th>
+                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF] hidden sm:table-cell">{t("clients.tableEmail")}</th>
+                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF] hidden md:table-cell">{t("clients.tablePhone")}</th>
+                <th className="text-left p-4 text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">{t("clients.tableStatus")}</th>
               </tr>
             </thead>
             <tbody>
@@ -201,11 +204,11 @@ export default function Clients() {
                   <td className="p-4">
                     {c.pending ? (
                       <Badge variant="outline" className="border-[#F59E0B]/30 text-[#F59E0B] bg-[#FFFBEB] gap-1 text-xs rounded-full">
-                        <Clock className="h-3 w-3" /> Pending
+                        <Clock className="h-3 w-3" /> {t("status.pending")}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="border-[#10B981]/30 text-[#10B981] bg-[#ECFDF5] gap-1 text-xs rounded-full">
-                        <UserCheck className="h-3 w-3" /> Active
+                        <UserCheck className="h-3 w-3" /> {t("status.active")}
                       </Badge>
                     )}
                   </td>
@@ -226,54 +229,54 @@ export default function Clients() {
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="bg-white border-[#E8E8E8] text-[#1F2937] max-w-lg rounded-2xl" data-testid="create-client-dialog">
-          <DialogHeader><DialogTitle className="font-['Nunito'] text-xl font-bold">New Client</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-['Nunito'] text-xl font-bold">{t("clients.newClient")}</DialogTitle></DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Full Name *</Label>
-              <Input value={newClient.name} onChange={(e) => setNewClient({ ...newClient, name: e.target.value })} required placeholder="Client name"
+              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">{t("clients.fullNameRequired")}</Label>
+              <Input value={newClient.name} onChange={(e) => setNewClient({ ...newClient, name: e.target.value })} required placeholder={t("clients.clientName")}
                 className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="new-client-name" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Email</Label>
-                <Input type="email" value={newClient.email} onChange={(e) => setNewClient({ ...newClient, email: e.target.value })} placeholder="email@example.com"
+                <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">{t("common.email")}</Label>
+                <Input type="email" value={newClient.email} onChange={(e) => setNewClient({ ...newClient, email: e.target.value })} placeholder={t("clients.emailPlaceholder")}
                   className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="new-client-email" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Phone</Label>
-                <Input value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })} placeholder="+1 (555) 000-0000"
+                <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">{t("common.phone")}</Label>
+                <Input value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })} placeholder={t("clients.phonePlaceholder")}
                   className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="new-client-phone" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Address</Label>
-              <Input value={newClient.address} onChange={(e) => setNewClient({ ...newClient, address: e.target.value })} placeholder="Street address"
+              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">{t("common.address")}</Label>
+              <Input value={newClient.address} onChange={(e) => setNewClient({ ...newClient, address: e.target.value })} placeholder={t("clients.streetAddress")}
                 className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] rounded-lg" data-testid="new-client-address" />
             </div>
             <div className="space-y-2">
-              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">Notes</Label>
-              <Textarea value={newClient.notes} onChange={(e) => setNewClient({ ...newClient, notes: e.target.value })} placeholder="Initial notes..."
+              <Label className="text-[#6B7280] text-xs uppercase tracking-wider font-bold">{t("common.notes")}</Label>
+              <Textarea value={newClient.notes} onChange={(e) => setNewClient({ ...newClient, notes: e.target.value })} placeholder={t("clients.initialNotes")}
                 className="bg-[#FAFAF8] border-[#E5E7EB] text-[#1F2937] min-h-[80px] rounded-lg" data-testid="new-client-notes" />
             </div>
             <DialogFooter>
               {duplicateWarning && (
                 <div className="w-full p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl mb-3 space-y-2" data-testid="duplicate-warning">
                   <div className="flex items-center gap-2 text-sm font-bold text-[#F59E0B]">
-                    <AlertTriangle className="h-4 w-4" /> Possible duplicate detected
+                    <AlertTriangle className="h-4 w-4" /> {t("clients.duplicateDetected")}
                   </div>
                   {duplicateWarning.map((d, i) => (
                     <div key={i} className="text-xs text-[#6B7280] bg-white p-2 rounded-lg border border-[#E5E7EB]">
                       <span className="font-semibold text-[#1F2937]">{d.name}</span>
                       <span className="mx-1">—</span>
-                      <span>Matched on {d.match_type}: {d.match_type === "email" ? d.email : d.phone}</span>
+                      <span>{t("clients.matchedOn")} {d.match_type}: {d.match_type === "email" ? d.email : d.phone}</span>
                     </div>
                   ))}
-                  <p className="text-[10px] text-[#9CA3AF]">Click "Create Anyway" to proceed or edit the details above.</p>
+                  <p className="text-[10px] text-[#9CA3AF]">{t("clients.clickToCreate")}</p>
                 </div>
               )}
-              <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); setDuplicateWarning(null); }} className="text-[#9CA3AF] rounded-lg">Cancel</Button>
+              <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); setDuplicateWarning(null); }} className="text-[#9CA3AF] rounded-lg">{t("common.cancel")}</Button>
               <Button type="submit" disabled={creating} className="bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-lg font-bold gap-2" data-testid="create-client-submit">
-                {creating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : duplicateWarning ? "Create Anyway" : "Create Client"}
+                {creating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : duplicateWarning ? t("clients.createAnyway") : t("clients.createClient")}
               </Button>
             </DialogFooter>
           </form>
