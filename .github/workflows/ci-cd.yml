@@ -40,16 +40,37 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio httpx
 
+      - name: Start backend server
+        env:
+          MONGO_URL: mongodb://localhost:27017
+          DB_NAME: hackforge_test
+          JWT_SECRET: test-secret-key
+          ADMIN_EMAIL: admin@caseflow.io
+          ADMIN_PASSWORD: admin123
+        run: |
+          cd backend
+          uvicorn server:app --host 127.0.0.1 --port 8001 &
+          echo $! > /tmp/server.pid
+          sleep 5
+
       - name: Run backend tests
         env:
           MONGO_URL: mongodb://localhost:27017
           DB_NAME: hackforge_test
           JWT_SECRET: test-secret-key
-          ADMIN_EMAIL: admin@hackforge.io
+          ADMIN_EMAIL: admin@caseflow.io
           ADMIN_PASSWORD: admin123
+          REACT_APP_BACKEND_URL: http://127.0.0.1:8001
         run: |
           cd backend
-          python -m pytest tests/ -v --tb=short
+          python -m pytest tests/ -v --tb=short -x
+
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ -f /tmp/server.pid ]; then
+            kill $(cat /tmp/server.pid) || true
+          fi
 
       - name: Lint backend
         run: |
